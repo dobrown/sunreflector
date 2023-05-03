@@ -9,4 +9,4 @@ The Java code is built on the Open Source Physics (OSP) framework and requires t
 
 Sun Reflector obtains sun position data from the <a href="https://gml.noaa.gov/grad/solcalc/calcdetails.html" target="_blank">NOAA solar position calculator</a>, an Excel spreadsheet. To access the spreadsheet it uses the following jars from the Apache Software Foundation: poi-3.17.jar, poi-ooxml-3.17.jar, poi-ooxml-schemas-3.17.jar, xmlbeans-2.6.0.jar, commons-collections4-4.1.jar.
 
-The SunReflector.zip file contains the ready-to-run application, including executable jar, NOAA spreadsheet and Apache library files. To run, download and unzip SunReflector.zip, open the SunReflector folder, and double-click sunreflector.jar.
+The docs/SunReflector.zip file contains the ready-to-run application, including executable jar, NOAA spreadsheet and Apache library files. To run, download and unzip SunReflector.zip, open the SunReflector folder, and double-click sunreflector.jar.
