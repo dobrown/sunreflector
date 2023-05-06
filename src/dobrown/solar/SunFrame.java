@@ -27,6 +27,12 @@ import java.awt.Image;
 import java.awt.Toolkit;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
+import java.awt.dnd.DropTargetDragEvent;
+import java.awt.dnd.DropTargetDropEvent;
+import java.awt.dnd.DropTargetEvent;
+import java.awt.dnd.DropTargetListener;
 import java.awt.event.ActionEvent;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -37,6 +43,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileAttribute;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 
@@ -111,6 +118,7 @@ public class SunFrame extends JFrame {
 	SunFrame(SunApp app) {
 		this.app = app;
 		createGUI();
+		enableDragNDrop();
 		refreshDisplay();
 	}
 	
@@ -253,6 +261,7 @@ public class SunFrame extends JFrame {
 		});
 
 		saveItem = new JMenuItem("Save"); //$NON-NLS-1$
+		saveItem.setAccelerator(KeyStroke.getKeyStroke('S', keyMask));
 		saveItem.addActionListener((e) -> {
 			if (myFile != null)
 				save(myFile.getAbsolutePath());
@@ -315,8 +324,10 @@ public class SunFrame extends JFrame {
 		sunBlockEnabledCheckbox.setSelected(app.sunBlock.isEnabled());
 		sunBlockEnabledCheckbox.addActionListener((e) -> {
 			app.sunBlock.setEnabled(sunBlockEnabledCheckbox.isSelected());
+			app.refreshViews();
 		});
 		shadeEditItem = new JMenuItem("Edit..."); //$NON-NLS-1$
+		shadeEditItem.setAccelerator(KeyStroke.getKeyStroke('M', keyMask));
 		shadeEditItem.addActionListener((e) -> {
 			app.sunBlock.setEnabled(true);
 			app.sunBlock.edit();
@@ -390,41 +401,106 @@ public class SunFrame extends JFrame {
 				File file = chooser.getSelectedFile();
 				OSPRuntime.setPreference("file_chooser_directory", file.getParent());
 				OSPRuntime.savePreferences();
-				String path = file.getAbsolutePath();
-				
-				// check for zip file and open the xml file inside, if any
-				if (SunApp.zipFileFilter.accept(file)) {
-					Map<String, ZipEntry> contents = ResourceLoader.getZipContents(path, true);
-					if (contents != null) {
-						for (String key: contents.keySet()) {
-							ZipEntry entry = contents.get(key);
-							String name = entry.getName();
-							if (name != null && name.toLowerCase().endsWith(".xml")) {
-								SunApp.zipFilePath = file.getAbsolutePath() + "!/";
-								name = SunApp.zipFilePath + name;
-								file = new File(name);
-								break;
-							}
-						}
-					}
-				}
-				XMLControlElement control = new XMLControlElement(file.getAbsolutePath());
-				Class<?> type = control.getObjectClass();
-				if (type == SunApp.class) {
-					control.loadObject(app);
-					myFile = chooser.getSelectedFile();
-					refreshDisplay();
-				}
-				else {
-					// show warning dialog
-					JOptionPane.showMessageDialog(app.frame, 
-							"\""+chooser.getSelectedFile().getName()+"\" is not a SunReflector file.", //$NON-NLS-1$
-							"Error", //$NON-NLS-1$
-							JOptionPane.WARNING_MESSAGE);
-				}
+				open(file);
+//				
+//				// check for zip file and open the xml file inside, if any
+//				if (SunApp.zipFileFilter.accept(file)) {
+//					String path = file.getAbsolutePath();
+//					Map<String, ZipEntry> contents = ResourceLoader.getZipContents(path, true);
+//					if (contents != null) {
+//						for (String key: contents.keySet()) {
+//							ZipEntry entry = contents.get(key);
+//							String name = entry.getName();
+//							if (name != null && name.toLowerCase().endsWith(".xml")) {
+//								SunApp.zipFilePath = file.getAbsolutePath() + "!/";
+//								name = SunApp.zipFilePath + name;
+//								file = new File(name);
+//								break;
+//							}
+//						}
+//					}
+//				}
+//				XMLControlElement control = new XMLControlElement(file.getAbsolutePath());
+//				Class<?> type = control.getObjectClass();
+//				if (type == SunApp.class) {
+//					control.loadObject(app);
+//					myFile = chooser.getSelectedFile();
+//					refreshDisplay();
+//				}
+//				else {
+//					// show warning dialog
+//					JOptionPane.showMessageDialog(app.frame, 
+//							"\""+chooser.getSelectedFile().getName()+"\" is not a SunReflector file.", //$NON-NLS-1$
+//							"Error", //$NON-NLS-1$
+//							JOptionPane.WARNING_MESSAGE);
+//				}
 			}			
 		};
 		chooser.showOpenDialog(this, ok, () -> {});
+	}
+	
+	/**
+	 * Opens a Sun Reflector zip or image file or warns if file is not valid.
+	 */  
+	public void open(File file) {
+		File theFile = file;
+		// check for zip file and open the xml file inside, if any
+		if (SunApp.zipFileFilter.accept(file)) {
+			String path = file.getAbsolutePath();
+			path = XML.forwardSlash(path);
+			Map<String, ZipEntry> contents = ResourceLoader.getZipContents(path, true);
+			if (contents != null) {
+				for (String key: contents.keySet()) {
+					ZipEntry entry = contents.get(key);
+					String name = entry.getName();
+					if (name != null && name.toLowerCase().endsWith(".xml")) {
+						SunApp.zipFilePath = file.getAbsolutePath() + "!/";
+						name = SunApp.zipFilePath + name;
+						file = new File(name);
+						break;
+					}
+				}
+			}
+			path = XML.forwardSlash(file.getAbsolutePath());
+			XMLControlElement control = new XMLControlElement(path);
+			Class<?> type = control.getObjectClass();
+			if (type == SunApp.class) {
+				control.loadObject(app);
+				myFile = theFile;
+				refreshDisplay();
+			}
+			else {
+				// show warning dialog
+				JOptionPane.showMessageDialog(app.frame, 
+						"\""+theFile.getName()+"\" is not a SunReflector file.", //$NON-NLS-1$
+						"Error", //$NON-NLS-1$
+						JOptionPane.WARNING_MESSAGE);
+			}
+		}
+		else if (SunApp.imageFileFilter.accept(file)){
+			String path = file.getAbsolutePath();
+			SunPlottingPanel plot = app.plot;
+			MapImage map = new MapImage(path);
+			if (map.getImagePath() != null) {
+				plot.setMap(map);
+				plot.repaint();
+			}
+			else {
+				// show warning dialog
+				JOptionPane.showMessageDialog(app.frame, 
+						"\""+theFile.getName()+"\" is not a readable image file.", //$NON-NLS-1$
+						"Error", //$NON-NLS-1$
+						JOptionPane.WARNING_MESSAGE);
+			}
+		}
+		else {
+			// show warning dialog
+			JOptionPane.showMessageDialog(app.frame, 
+					"\""+theFile.getName()+"\" is not a SunReflector file.", //$NON-NLS-1$
+					"Error", //$NON-NLS-1$
+					JOptionPane.WARNING_MESSAGE);
+			
+		}
 	}
 	
 	/**
@@ -492,10 +568,11 @@ public class SunFrame extends JFrame {
 				filesToZip.add(imageFile);
 			}
 		}		
-		if (app.sunBlock.getMapImage() != null) {
-			File imageFile = saveTempImage(app.sunBlock.getMapImage(), baseName+"_block.jpg");
+		for (int i = 0; i < app.sunBlock.images.size(); i++) {
+			MapImage img = app.sunBlock.images.get(i);
+			File imageFile = saveTempImage(img, baseName+"_block.jpg");
 			if (imageFile != null && imageFile.exists()) {
-				app.sunBlock.getMapImage().tempImageName = imageFile.getName();
+				img.tempImageName = imageFile.getName();
 				filesToZip.add(imageFile);
 			}
 		}
@@ -592,20 +669,21 @@ public class SunFrame extends JFrame {
 				File file = chooser.getSelectedFile();
 				OSPRuntime.setPreference("file_chooser_directory", file.getParent());
 				OSPRuntime.savePreferences();
-				String path = file.getAbsolutePath();
-				SunPlottingPanel plot = app.plot;
-				MapImage map = new MapImage(path);
-				if (map.getImagePath() != null) {
-					plot.setMap(map);
-					plot.repaint();
-				}
-				else {
-					// show warning dialog
-					JOptionPane.showMessageDialog(app.frame, 
-							"\""+chooser.getSelectedFile().getName()+"\" is not a readable image file.", //$NON-NLS-1$
-							"Error", //$NON-NLS-1$
-							JOptionPane.WARNING_MESSAGE);
-				}
+				open(file);
+//				String path = file.getAbsolutePath();
+//				SunPlottingPanel plot = app.plot;
+//				MapImage map = new MapImage(path);
+//				if (map.getImagePath() != null) {
+//					plot.setMap(map);
+//					plot.repaint();
+//				}
+//				else {
+//					// show warning dialog
+//					JOptionPane.showMessageDialog(app.frame, 
+//							"\""+chooser.getSelectedFile().getName()+"\" is not a readable image file.", //$NON-NLS-1$
+//							"Error", //$NON-NLS-1$
+//							JOptionPane.WARNING_MESSAGE);
+//				}
 			}			
 		};
 		chooser.showOpenDialog(this, ok, null);
@@ -635,8 +713,10 @@ public class SunFrame extends JFrame {
 	 */
 	public void showAboutDialog() {
 		String date = OSPRuntime.getLaunchJarBuildDate();		
-		String aboutString = "Sun Reflector " + app.version + "\nBuild date " + date + "\n" //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-				+ "Douglas Brown, author\nBuilt with Open Source Physics"; //$NON-NLS-1$
+		String aboutString = "Sun Reflector " + app.version 
+				+ "\nBuild date " + date //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				+ "\nCopyright (c) 2023 Douglas Brown"
+				+ "\nhttps://github.com/dobrown";
 		new AsyncDialog().showMessageDialog(this, 
 				aboutString, 
 				"About Sun Reflector", 
@@ -687,4 +767,49 @@ public class SunFrame extends JFrame {
 		return tempDir;
 	}
 
+	private void enableDragNDrop(){
+		new DropTarget(this, new DropTargetListener(){			
+      public void dragEnter(DropTargetDragEvent e){}     
+      public void dragExit(DropTargetEvent e){}      
+      public void dragOver(DropTargetDragEvent e){}     
+      public void dropActionChanged(DropTargetDragEvent e){}
+      
+      @SuppressWarnings("unchecked")
+			public void drop(DropTargetDropEvent e){
+        try {
+            // accept the drop first, important!
+            e.acceptDrop(DnDConstants.ACTION_COPY_OR_MOVE);            
+            // get the list of dropped files
+            List<Object> list=(List<Object>) e.getTransferable().
+            		getTransferData(DataFlavor.javaFileListFlavor);           
+            // open the first file in the list
+            File file = (File)list.get(0);
+            open(file);
+            
+        } catch(Exception ex){}
+      }
+    });
+		new DropTarget(app.controls.info, new DropTargetListener(){			
+      public void dragEnter(DropTargetDragEvent e){}      
+      public void dragExit(DropTargetEvent e){}      
+      public void dragOver(DropTargetDragEvent e){}      
+      public void dropActionChanged(DropTargetDragEvent e){}
+      
+      @SuppressWarnings("unchecked")
+			public void drop(DropTargetDropEvent e){
+        try {
+            // accept the drop first, important!
+            e.acceptDrop(DnDConstants.ACTION_COPY_OR_MOVE);            
+            // get the list of dropped files
+            List<Object> list=(List<Object>) e.getTransferable().
+            		getTransferData(DataFlavor.javaFileListFlavor);           
+            // open the first file in the list
+            File file = (File)list.get(0);
+            open(file);
+            
+        } catch(Exception ex){}
+      }
+    });
+  }
+	
 }

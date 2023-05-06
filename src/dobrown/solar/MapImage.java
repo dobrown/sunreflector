@@ -190,6 +190,14 @@ public class MapImage extends MeasuredImage {
 		setMinMax(-x, w-x, y-h, y);		
 	}
 	
+	boolean contains(SunPoint p) {
+		if (p == null) return false;
+		return p.getX() > getXMin()
+				&& p.getX() < getXMax()
+				&& p.getY() > getYMin()
+				&& p.getY() < getYMax();
+	}
+	
 	/**
 	 * A class to save and load data for this class.
 	 */
