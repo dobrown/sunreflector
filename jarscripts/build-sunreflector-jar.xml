@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<!DOCTYPE project>
+<project name="build-sunreflector-jar" default="sunreflector_jar" basedir=".\">
+	<property name="workspace" value="../../" />
+	<property name="sundir" value="${workspace}/solar" />
+	<property name="src_osp" value="${workspace}/osp/src" />
+	<property name="src_sun" value="${sundir}/src" />
+	<property name="temp" value="temp-build" />
+	<property name="output" value="${sundir}/distribution" />
+	<property name="docs" value="${output}/docs" />
+	<property name="author" value="D Brown, W Christian, R M Hanson" />
+
+	<tstamp>
+		<format property="buildtime.isoformat" pattern="MMM dd yyyy"/>
+		<format property="date" pattern="yyyyMMdd"/>
+	</tstamp>
+
+	<!--clean: clean the temp directory-->
+	<target name="clean">
+		<delete dir="${temp}/meta-inf"/>
+		<delete dir="${temp}"/>
+		<mkdir dir="${temp}"/>
+		<mkdir dir="${temp}/meta-inf"/>
+	</target>
+	
+	<!--copy_bin: copy class files from bin to temp directory-->
+	<target name="copy_bin" depends="clean">
+		<copy todir="${temp}">
+            <fileset dir="${workspace}/osp/bin"
+          		excludes="
+            	test/, 
+            	testing/, 
+            	csm/, 
+            	davidson/, 
+            	demo/, 
+            	debugging/, 
+            	demoJS/, 
+            	**/*.zip, 
+            	**/*.mp4,
+            	*.xml, 
+            	*.txt" />
+            <fileset dir="${workspace}/solar/bin"
+            	excludes="
+            	test/, 
+            	**/*.zip, 
+            	*.xml, 
+            	*.prefs, 
+            	*.txt" />
+		</copy>
+	</target>
+	
+	<!--sunreflector_jar: copy bin and create sunreflector.jar from temp directory-->
+    <target name="sunreflector_jar" depends="copy_bin">
+		<manifest file="${temp}/meta-inf/SUN.mf">
+			<attribute name="Built-By" value="${author}"/>
+			<attribute name="Build-Date" value="${buildtime.isoformat}"/>
+			<attribute name="Main-Class" value="dobrown.solar.SunApp"/>
+			<attribute name="Class-Path" value=". lib/poi-3.17.jar lib/poi-ooxml-3.17.jar lib/poi-ooxml-schemas-3.17.jar lib/commons-collections4-4.1.jar lib/xmlbeans-2.6.0.jar"/>
+			<attribute name="permissions" value="all-permissions"/>
+		</manifest >
+		<jar jarfile="${output}/sunreflector.jar" basedir="${temp}" manifest="${temp}/meta-inf/SUN.mf" 
+			includes="
+			**/epsgraphics/,
+            **/controls/,
+            **/javajs/,
+            **/js/,
+            **/display/,
+            **/numerics/,
+            **/tools/,
+			**/media/,
+			**/solar/,
+            **/opensourcephysics/resources/" 
+        	excludes="**/html/, **/*.zip, **/*.mp4">
+		</jar>
+		<delete dir="${temp}"/>
+	</target>
+
+</project>
+
+
+
