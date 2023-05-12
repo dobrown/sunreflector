@@ -88,8 +88,8 @@ public class SunControlPanel extends JPanel {
 
 		
 		loadLabel = new JLabel();
-		Border empty = BorderFactory.createEmptyBorder(4, 10, 4, 10);
-		Border smaller = BorderFactory.createEmptyBorder(2, 8, 2, 8);
+		Border empty = BorderFactory.createEmptyBorder(4, 4, 4, 7);
+		Border smaller = BorderFactory.createEmptyBorder(2, 2, 2, 5);
 		Border etched = BorderFactory.createEtchedBorder();
 		Border combo = BorderFactory.createCompoundBorder(etched, smaller);
 		loadLabel.addMouseListener(new MouseAdapter() {
@@ -255,11 +255,11 @@ public class SunControlPanel extends JPanel {
 		JPanel locPanel = new JPanel();
 		
 //		locPanel.add(loadButton);
-		locPanel.add(loadLabel);
 		locPanel.add(latLabel);
 		locPanel.add(latField);
 		locPanel.add(longLabel);
 		locPanel.add(longField);
+		locPanel.add(loadLabel);
 //		locPanel.add(timezoneLabel);
 //		locPanel.add(timezoneField);
 		locPanel.setBackground(tab.plot.getBackground());
@@ -404,12 +404,12 @@ public class SunControlPanel extends JPanel {
 				+ " Check \"Show tracks\" to see the ray tracks across the sky"
 				+ " for the entire day."
 				+ "\n\n"
-				+ "A map image may be displayed in the overhead view to help"
+				+ "A map image may be added to the overhead view to help"
 				+ " evaluate possible glare. Drag to move the map"
 				+ " or use the toolbar buttons to control its scale and opacity."
 				+ " To replace the map, drag and drop an image file,"
 				+ " paste an image from the clipboard,"
-				+ " or choose File|Open Map."
+				+ " or click the open map button."
 				+ "\n\n"
 				+ "The horizontal view at the lower right shows the solar panel"
 				+ " from a viewpoint on the horizon (green arrow in the overhead view)."
@@ -426,7 +426,7 @@ public class SunControlPanel extends JPanel {
 				+ "At some locations the skyline may reduce"
 				+ " the sun hours significantly. To account for this choose Edit|Skyline"
 				+ " and create a skyline in the Skyline Editor."
-				+ " Check \"Show skyline\" to draw the skyline in both views"
+				+ " Check \"Show skyline\" to draw the skyline"
 				+ " and determine its effect on sun hours."
 				+ "\n\n"
 				+ "Sun data are loaded from the NOAA solar position calculator"
@@ -435,7 +435,7 @@ public class SunControlPanel extends JPanel {
 				+ " By default, the location is"
 				+ " South Lake Tahoe CA and the date/time ranges"
 				+ " are May 1-Sep 30 and 6:00 am-8:00 pm."
-				+ " Choose Edit|Sun Data to load data for other locations or times.";
+				+ " Click the open data button to load data for other locations or times.";
 	}
 	
 	/**

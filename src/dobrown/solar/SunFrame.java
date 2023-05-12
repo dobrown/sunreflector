@@ -101,7 +101,7 @@ public class SunFrame extends JFrame {
 	JMenuItem openItem, saveItem, saveAsItem, loadSunDataItem;
 	JMenuItem openImageItem, pasteImageItem, closeImageItem;
 	JMenuItem aboutItem;
-	JMenuItem mapEditItem, skylineEditItem;
+	JMenuItem skylineEditItem;
 	MenuListener menuListener;
 	
 	ArrayList<File> filesToZip = new ArrayList<File>();
@@ -241,11 +241,17 @@ public class SunFrame extends JFrame {
 	 * Refreshes the display to reflect the current settings.
 	 */
 	void refreshDisplay() {
-		int i = tabbedPane.getSelectedIndex();
-		saveItem.setText("Save "+(i<0? "": "\"" + tabbedPane.getTitleAt(i)+ "\""));
-		saveItem.setEnabled(i >= 0);
-		closeTabItem.setText("Close "+(i<0? "": "\"" + tabbedPane.getTitleAt(i)+ "\""));
-		closeTabItem.setEnabled(i >= 0);
+//		int i = tabbedPane.getSelectedIndex();
+//		saveItem.setText("Save "+(i<0? "": "\"" + tabbedPane.getTitleAt(i)+ "\""));
+//		saveItem.setEnabled(i >= 0);
+//		closeTabItem.setText("Close "+(i<0? "": "\"" + tabbedPane.getTitleAt(i)+ "\""));
+//		saveAsItem.setEnabled(i >= 0);
+//		loadSunDataItem.setEnabled(i >= 0);
+//		openImageItem.setEnabled(i >= 0);
+//		pasteImageItem.setEnabled(i >= 0);
+//		closeImageItem.setEnabled(i >= 0);
+//		skylineEditItem.setEnabled(i >= 0);
+		
 		SunTabPanel panel = getSelectedTabPanel();
 		if (panel != null)
 			panel.refreshDisplay();
@@ -272,8 +278,8 @@ public class SunFrame extends JFrame {
 			tab.when.setDayOfYear(SunTab.DEFAULT_DAY_OF_YEAR);
 			tab.when.setTime(SunTab.DEFAULT_HOUR);
 			tabbedPane.setSelectedIndex(tabbedPane.getTabCount()-1);
-			tab.isLoading = false;
 			tab.refreshViews();
+			tab.isLoading = false;
 		});
 
   	openItem = new JMenuItem("Open Tab..."); //$NON-NLS-1$
@@ -287,7 +293,7 @@ public class SunFrame extends JFrame {
 			removeSelectedTab();
 		});
 
-		saveItem = new JMenuItem("Save"); //$NON-NLS-1$
+  	saveItem = new JMenuItem("Save"); //$NON-NLS-1$
 		saveItem.setAccelerator(KeyStroke.getKeyStroke('S', keyMask));
 		saveItem.addActionListener((e) -> {
 			SunTab tab = getSelectedTab();
@@ -327,10 +333,10 @@ public class SunFrame extends JFrame {
 		fileMenu.addSeparator();
 		fileMenu.add(saveItem);
 		fileMenu.add(saveAsItem);
-		fileMenu.addSeparator();
-		fileMenu.add(openImageItem);
-		fileMenu.addSeparator();
-		fileMenu.add(closeImageItem);
+//		fileMenu.addSeparator();
+//		fileMenu.add(openImageItem);
+//		fileMenu.addSeparator();
+//		fileMenu.add(closeImageItem);
 		
 		pasteImageItem = new JMenuItem("Paste Map"); //$NON-NLS-1$
 		pasteImageItem.setAccelerator(KeyStroke.getKeyStroke('V', keyMask));
@@ -380,13 +386,25 @@ public class SunFrame extends JFrame {
 
 			@Override
 			public void menuSelected(MenuEvent e) {
-				Transferable t = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
 				boolean enable = false;
+				Transferable t = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
 				try {
 					enable = t != null && t.isDataFlavorSupported(DataFlavor.imageFlavor);
-					pasteImageItem.setEnabled(enable);
 				} catch (Exception ex) {
 				}
+				pasteImageItem.setEnabled(enable);
+
+				int i = tabbedPane.getSelectedIndex();
+				boolean b = i >= 0;
+				saveItem.setText("Save "+(!b? "": "\"" + tabbedPane.getTitleAt(i)+ "\""));
+				saveItem.setEnabled(b);
+				closeTabItem.setText("Close "+(!b? "": "\"" + tabbedPane.getTitleAt(i)+ "\""));
+				closeTabItem.setEnabled(b);
+				saveAsItem.setEnabled(b);
+				openImageItem.setEnabled(b);
+				loadSunDataItem.setEnabled(b);
+				closeImageItem.setEnabled(b);
+				skylineEditItem.setEnabled(b);
 			}
 
 			@Override
@@ -397,6 +415,7 @@ public class SunFrame extends JFrame {
 			
 		};
 		editMenu.addMenuListener(menuListener);
+		fileMenu.addMenuListener(menuListener);
   }
   
 	/**

@@ -22,7 +22,7 @@ public class SunTabPanel extends JPanel {
 	SunTab tab;
 	JToolBar toolbar;
 	JCheckBox showTracksCheckbox, showSkylineCheckbox;	
-	JButton zoomButton, opacityButton;
+	JButton zoomButton, opacityButton, openMapButton, closeMapButton;
 	JSlider mapAlphaSlider;
 	JLabel mapLabel, mapDragLabel;
 	
@@ -124,7 +124,24 @@ public class SunTabPanel extends JPanel {
 			}				
 		});
 
-		mapLabel = new JLabel("Map:");
+		openMapButton = new OSPButton();
+		openMapButton.setAction(new AbstractAction() {
+			public void actionPerformed(ActionEvent e) {
+				tab.frame.openImage();
+				tab.frame.refreshDisplay();
+			}				
+		});
+		
+		closeMapButton = new OSPButton();
+		closeMapButton.setAction(new AbstractAction() {
+			public void actionPerformed(ActionEvent e) {
+				tab.plot.setMap(null);
+				tab.plot.repaint();
+				tab.frame.refreshDisplay();
+			}				
+		});
+				
+		mapLabel = new JLabel("Map");
 		mapDragLabel = new JLabel("| drag to move");
 		
 		buildToolbar();
@@ -146,13 +163,16 @@ public class SunTabPanel extends JPanel {
 		toolbar.add(showTracksCheckbox);
 		toolbar.add(showSkylineCheckbox);
 		toolbar.add(Box.createHorizontalGlue());
+		
+		toolbar.add(mapLabel);
 		if (tab.plot.map != null) {
-			toolbar.add(mapLabel);
 			toolbar.add(zoomButton);
 			toolbar.add(opacityButton);
 //			toolbar.add(mapDragLabel);
-			toolbar.add(Box.createHorizontalStrut(8));
 		}
+		toolbar.add(openMapButton);
+		toolbar.add(closeMapButton);
+//		toolbar.add(Box.createHorizontalStrut(8));
 	}
 	
 	/**
@@ -160,7 +180,11 @@ public class SunTabPanel extends JPanel {
 	 */
 	void refreshDisplay() {
 		showTracksCheckbox.setSelected(tab.plot.isTracksVisible());
-		zoomButton.setIcon(tab.zoomIcon);
+		openMapButton.setIcon(SunTab.openIcon);
+		openMapButton.setToolTipText("Open a map image file");
+		closeMapButton.setIcon(SunTab.closeIcon);
+		closeMapButton.setToolTipText("Remove the map image");
+		zoomButton.setIcon(SunTab.zoomIcon);
 		zoomButton.setText("Scale");
 		zoomButton.setToolTipText("Resize the map image");
 		opacityButton.setText("Opacity");
@@ -171,9 +195,10 @@ public class SunTabPanel extends JPanel {
 		showSkylineCheckbox.setSelected(tab.sunBlock.isEnabled());
 		mapAlphaSlider.setValue(tab.plot.mapAlpha);
 		
-		mapLabel.setEnabled(tab.plot.map != null && tab.plot.map.isVisible());
+//		mapLabel.setEnabled(tab.plot.map != null && tab.plot.map.isVisible());
 		mapDragLabel.setEnabled(tab.plot.map != null && tab.plot.map.isVisible());
 		showTracksCheckbox.setEnabled(tab.sunAzaltData != null);
+		closeMapButton.setEnabled(tab.plot.map != null);
 
 		buildToolbar();
 	}

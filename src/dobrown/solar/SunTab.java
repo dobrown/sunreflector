@@ -72,7 +72,7 @@ public class SunTab {
 		new Color(255, 0, 0, 60) // red
 	};
 	static ArrayList<Color> rayColors = new ArrayList<Color>();	
-	static Icon zoomIcon, openIcon;
+	static Icon zoomIcon, openIcon, closeIcon;
   static String zipFilePath; // used when loading sunzip files
   
 	NOAAReader reader;
@@ -113,6 +113,7 @@ public class SunTab {
 		
 		zoomIcon = ResourceLoader.getImageIcon(RESOURCE_PATH + "zoom.gif");
 		openIcon = ResourceLoader.getImageIcon(RESOURCE_PATH + "open.gif");
+		closeIcon = ResourceLoader.getImageIcon(RESOURCE_PATH + "close.gif");
 		
 		zipFileFilter = new SingleExtFileFilter("zip", "ZIP files");
 		imageFileFilter = new SingleExtFileFilter(null, "Image files") { //$NON-NLS-1$
@@ -259,6 +260,8 @@ public class SunTab {
 		plot.refreshPlotData();
 		plot.plot();
 		controls.refreshDisplay();
+		if (tabPanel != null)
+			tabPanel.refreshDisplay();
 	}
 	
 	/**
