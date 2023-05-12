@@ -63,7 +63,7 @@ public class NOAAReaderControl extends JDialog {
 	boolean ready; // true if NOAA spreadsheet is found
 	
 	NOAAReaderControl(NOAAReader reader) {
-		super(reader.app.frame, true);
+		super(reader.tab.frame, true);
 		this.reader = reader;
 		
 		setTitle("Load NOAA Solar Data");
@@ -104,9 +104,9 @@ public class NOAAReaderControl extends JDialog {
 //			latField.setText("" + loc[0]);
 //			longField.setText("" + loc[1]);
 //			zoneSpinner.setValue(reader.app.round(loc[2]));			
-			latField.setText("" + reader.app.latitude);
-			longField.setText("" + reader.app.longitude);
-			zoneSpinner.setValue(reader.app.timeZone);			
+			latField.setText("" + reader.tab.latitude);
+			longField.setText("" + reader.tab.longitude);
+			zoneSpinner.setValue(reader.tab.timeZone);			
 		}
 		
 		dates = new String[365];
@@ -121,7 +121,7 @@ public class NOAAReaderControl extends JDialog {
 		startDateLabel.setBorder(labelBorder);
 		SpinnerModel dateModel = new SpinnerListModel(dates);
 		startDateSpinner = new JSpinner(dateModel);
-		startDateSpinner.setValue(SunMoment.getDateString(reader.app.startDay));
+		startDateSpinner.setValue(SunMoment.getDateString(reader.tab.startDay));
 		datePanel.add(startDateLabel);
 		datePanel.add(startDateSpinner);
 		
@@ -130,7 +130,7 @@ public class NOAAReaderControl extends JDialog {
 		endDateLabel.setBorder(labelBorder);
 		dateModel = new SpinnerListModel(dates);
 		endDateSpinner = new JSpinner(dateModel);
-		int endDay = reader.app.startDay + reader.app.dayCount - 1;
+		int endDay = reader.tab.startDay + reader.tab.dayCount - 1;
 		endDateSpinner.setValue(SunMoment.getDateString(endDay));
 		datePanel.add(endDateLabel);
 		datePanel.add(endDateSpinner);
@@ -147,7 +147,7 @@ public class NOAAReaderControl extends JDialog {
 		startTimeLabel.setBorder(labelBorder);
 		SpinnerModel timeModel = new SpinnerListModel(times);
 		startTimeSpinner = new JSpinner(timeModel);
-		startTimeSpinner.setValue(SunMoment.getTimeString(reader.app.startHour));
+		startTimeSpinner.setValue(SunMoment.getTimeString(reader.tab.startHour));
 		timePanel.add(startTimeLabel);
 		timePanel.add(startTimeSpinner);
 		
@@ -156,7 +156,7 @@ public class NOAAReaderControl extends JDialog {
 		endTimeLabel.setBorder(labelBorder);
 		timeModel = new SpinnerListModel(times);
 		endTimeSpinner = new JSpinner(timeModel);
-		endTimeSpinner.setValue(SunMoment.getTimeString(reader.app.endHour));
+		endTimeSpinner.setValue(SunMoment.getTimeString(reader.tab.endHour));
 		timePanel.add(endTimeLabel);
 		timePanel.add(endTimeSpinner);
 		
@@ -172,7 +172,7 @@ public class NOAAReaderControl extends JDialog {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				setVisible(false);
-				reader.app.frame.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+				reader.tab.frame.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 				loadSunData();
 			}
 		});
@@ -190,7 +190,7 @@ public class NOAAReaderControl extends JDialog {
 		contentPane.add(buttonBar, BorderLayout.SOUTH);
 		
 		pack();
-		setLocationRelativeTo(reader.app.frame);
+		setLocationRelativeTo(reader.tab.frame);
 	}
 	
 	/**
@@ -268,9 +268,9 @@ public class NOAAReaderControl extends JDialog {
 		int count = Math.max(1, endDay - startDay + 1);
 		String textData = reader.read(startDay, count,
 				startT, endT);
-		reader.app.loadSunDataFromText(textData);
-		reader.app.updateReflections();
-		reader.app.refreshViews();
+		reader.tab.loadSunDataFromText(textData);
+		reader.tab.updateReflections();
+		reader.tab.refreshViews();
 	}
 	
 }

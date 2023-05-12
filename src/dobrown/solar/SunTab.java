@@ -42,11 +42,11 @@ import org.opensourcephysics.tools.FunctionEditor;
 import org.opensourcephysics.tools.ResourceLoader;
 
 /**
- * This is the main Sun Reflector application.
+ * This is a Sun Reflector tab.
  *
  * @author Douglas Brown
  */
-public class SunApp {
+public class SunTab {
 
 	public static final double ONE_DEGREE = Math.toRadians(1);
 	// constants to define visible rotation axis
@@ -62,10 +62,19 @@ public class SunApp {
   static final String ZONE = "_timezone_";
 	static FileFilter zipFileFilter, imageFileFilter;
   static String defaultSunData = "south_tahoe.txt";
+	static float[] skyFractions = new float[] {0.0f, 0.3f, 0.8f, 0.95f, 0.975f, 1f};
+	static Color[] skyColors = {
+		new Color(200, 200, 255, 60), // sky blue
+		new Color(200, 200, 255, 60), // sky blue
+		new Color(250, 250, 150, 60), // sky yellow
+		new Color(255, 150, 80, 60), // sunset
+		new Color(255, 50, 50, 60), // inside horizon
+		new Color(255, 0, 0, 60) // red
+	};
+	static ArrayList<Color> rayColors = new ArrayList<Color>();	
+	static Icon zoomIcon, openIcon;
   static String zipFilePath; // used when loading sunzip files
   
-  String version = "1.0.0";
-	
 	NOAAReader reader;
 	String textData;
 	DatasetManager sunAzaltData, reflectionAzaltData;
@@ -78,6 +87,8 @@ public class SunApp {
 	SunPVDrawingPanel pvDrawingPanel;
 	SunFrame frame;
 	SunControlPanel controls;
+	SunTabPanel tabPanel;
+	File myFile;
 	
 	int startDay, dayCount = 1, timeZone;
 	double startHour, endHour, latitude, longitude;
@@ -85,24 +96,10 @@ public class SunApp {
 	Color[][] currentRayColors = new Color[2][2];
 	boolean[] currentRayVis = new boolean[2];
 	
-	float[] skyFractions = new float[] {0.0f, 0.3f, 0.8f, 0.95f, 0.975f, 1f};
-	Color[] skyColors = {
-		new Color(200, 200, 255, 60), // sky blue
-		new Color(200, 200, 255, 60), // sky blue
-		new Color(250, 250, 150, 60), // sky yellow
-		new Color(255, 150, 80, 60), // sunset
-		new Color(255, 50, 50, 60), // inside horizon
-		new Color(255, 0, 0, 60) // red
-	};
-	ArrayList<Color> rayColors = new ArrayList<Color>();	
-	Icon zoomIcon;
 	int visibleRotationAxis = AXIS_NONE;
 	boolean isLoading;
 	
-	/**
-	 * Constructor
-	 */
-	public SunApp() {
+	static {
 		// set up ray colors in order of altitude in degrees
 		// reds near horizon
 		for (int i = 0; i < 11; i++)
@@ -113,9 +110,9 @@ public class SunApp {
 		for (int i = 0; i < 70; i++) {
 			rayColors.add(new Color(155-i, 250, 0));
 		}
-		currentRayColors[0][0] = Color.YELLOW;
-		currentRayColors[0][1] = Color.RED.darker();
+		
 		zoomIcon = ResourceLoader.getImageIcon(RESOURCE_PATH + "zoom.gif");
+		openIcon = ResourceLoader.getImageIcon(RESOURCE_PATH + "open.gif");
 		
 		zipFileFilter = new SingleExtFileFilter("zip", "ZIP files");
 		imageFileFilter = new SingleExtFileFilter(null, "Image files") { //$NON-NLS-1$
@@ -129,32 +126,22 @@ public class SunApp {
 						|| "gif".equalsIgnoreCase(ext));  //$NON-NLS-1$
 			}
 		};
+	}
+	
+	/**
+	 * Constructor
+	 */
+	public SunTab() {
+		currentRayColors[0][0] = Color.YELLOW;
+		currentRayColors[0][1] = Color.RED.darker();
 
 		// create default SunMoment in case no data is loaded
-		when = new SunMoment();
-		
-		String textData = ResourceLoader.getString(RESOURCE_PATH + defaultSunData);
-		loadSunDataFromText(textData); // creates new SunMoment if successful
-		
+		when = new SunMoment();		
 		sunBlock = new SunBlocker(this);
 		reflector = new SunReflector(this);
 		pvDrawingPanel = new SunPVDrawingPanel(this);
 		plot = new SunPlottingPanel(this);
 		controls = new SunControlPanel(this);
-		updateReflections();
-		when.setDayOfYear(DEFAULT_DAY_OF_YEAR);
-		when.setTime(DEFAULT_HOUR);
-		refreshViews();
-		// create frame last since it needs views and controls
-		frame = new SunFrame(this);
-	}
-	
-	/**
-	 * main method, params unused
-	 */
-	public static void main(String[] params) {
-		SunApp app = new SunApp();
-		app.frame.setVisible(true);
 	}
 	
 	/**
@@ -428,7 +415,7 @@ public class SunApp {
 		 */
 		@Override
 		public void saveObject(XMLControl control, Object obj) {
-			SunApp app = (SunApp)obj;			
+			SunTab app = (SunTab)obj;			
 			control.setValue("reflector", app.reflector); //$NON-NLS-1$
 			control.setValue("day_time", app.when); //$NON-NLS-1$
 			control.setValue("plot", app.plot); //$NON-NLS-1$
@@ -445,7 +432,7 @@ public class SunApp {
 		 */
 		@Override
 		public Object createObject(XMLControl control) {
-			return null;
+			return new SunTab();
 		}
 
 		/**
@@ -457,18 +444,17 @@ public class SunApp {
 		 */
 		@Override
 		public Object loadObject(XMLControl control, Object obj) {
-			SunApp app = (SunApp)obj;
-			app.isLoading = true;
-			app.loadSunDataFromText(control.getString("sun_data"));
-			control.getChildControl("reflector").loadObject(app.reflector);
-			app.updateReflections();
-			control.getChildControl("day_time").loadObject(app.when);
-			control.getChildControl("sun_block").loadObject(app.sunBlock);
-			control.getChildControl("plot").loadObject(app.plot);
-			app.setCameraAz(control.getDouble("camera_az"));
-			app.refreshViews();
-			app.frame.refreshDisplay();
-			app.isLoading = false;
+			SunTab tab = (SunTab)obj;
+			tab.isLoading = true;
+			tab.loadSunDataFromText(control.getString("sun_data"));
+			control.getChildControl("reflector").loadObject(tab.reflector);
+			tab.updateReflections();
+			control.getChildControl("day_time").loadObject(tab.when);
+			control.getChildControl("sun_block").loadObject(tab.sunBlock);
+			control.getChildControl("plot").loadObject(tab.plot);
+			tab.setCameraAz(control.getDouble("camera_az"));
+			tab.refreshViews();
+			tab.isLoading = false;
 			return obj;
 		}
 	}

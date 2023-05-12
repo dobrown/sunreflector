@@ -54,7 +54,7 @@ public class NOAAReader {
   static final int JAN_1_2023 = 44926; // NOAA's day numbering
 	String noaaFile = "NOAA_Solar_Calculations.xls";
   
-  SunApp app;
+  SunTab tab;
 	FileInputStream inputStream;
 	Workbook workbook;
   Sheet sheet; 
@@ -70,10 +70,10 @@ public class NOAAReader {
 	/**
 	 * Constructor
 	 * 
-	 * @param app the SunApp
+	 * @param tab the SunApp
 	 */
-	NOAAReader(SunApp app) {
-		this.app = app;
+	NOAAReader(SunTab tab) {
+		this.tab = tab;
 		String jarDir = OSPRuntime.getLaunchJarDirectory();
 		pathToNOAA = jarDir + "/" + noaaFile;
 	}
@@ -138,8 +138,8 @@ public class NOAAReader {
 		
     closeWorkbook();
     
-    String name = app.START_DAY + startDay + app.LATITUDE + loc[0]
-    		+ app.LONGITUDE + loc[1] + app.ZONE + loc[2];
+    String name = tab.START_DAY + startDay + tab.LATITUDE + loc[0]
+    		+ tab.LONGITUDE + loc[1] + tab.ZONE + loc[2];
     
 		return name + "\n" + buf.toString();		
   }

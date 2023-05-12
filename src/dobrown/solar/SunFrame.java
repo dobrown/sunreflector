@@ -34,6 +34,7 @@ import java.awt.dnd.DropTargetDropEvent;
 import java.awt.dnd.DropTargetEvent;
 import java.awt.dnd.DropTargetListener;
 import java.awt.event.ActionEvent;
+import java.awt.image.BufferedImage;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -63,8 +64,10 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JSlider;
 import javax.swing.JSplitPane;
+import javax.swing.JTabbedPane;
 import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
+import javax.swing.SwingConstants;
 import javax.swing.event.MenuEvent;
 import javax.swing.event.MenuListener;
 
@@ -88,39 +91,134 @@ import javajs.async.AsyncFileChooser;
  */
 public class SunFrame extends JFrame {
 	
-	SunApp app;
+  static String version = "1.0.0";
+  static int nameSuffix = 0;
 	
-	JToolBar toolbar;
-	JCheckBox showTracksCheckbox;	
-	JButton zoomButton;
+	JTabbedPane tabbedPane;
 	
-	JMenu fileMenu, sunDataMenu, mapMenu, sunBlockMenu, helpMenu;
+	JMenu fileMenu, editMenu, helpMenu;
+	JMenuItem newTabItem, closeTabItem;
 	JMenuItem openItem, saveItem, saveAsItem, loadSunDataItem;
 	JMenuItem openImageItem, pasteImageItem, closeImageItem;
 	JMenuItem aboutItem;
-	JMenu mapAlphaMenu;
-	JMenuItem mapEditItem, shadeEditItem;
-	JCheckBoxMenuItem sunBlockEnabledCheckbox;
-	JSlider mapAlphaSlider;
-	JLabel mapLabel, mapDragLabel;
+	JMenuItem mapEditItem, skylineEditItem;
 	MenuListener menuListener;
 	
 	ArrayList<File> filesToZip = new ArrayList<File>();
 	String tempDir;
-	File myFile;
-
-
+	
 	/**
 	 * Constructor
 	 * 
-	 * @param app the SunApp
+	 * @param tab the SunApp
 	 */
-	SunFrame(SunApp app) {
-		this.app = app;
+	SunFrame() {
 		createGUI();
+		pack();
 		enableDragNDrop();
 		refreshDisplay();
 	}
+	
+	void addTab(SunTab tab, String title) {
+		synchronized (tabbedPane) {
+			tab.frame = this;
+			if (title == null || title.trim().equals(""))
+				title = "untitled " + nameSuffix++;
+			tabbedPane.addTab(title, new SunTabPanel(tab));
+		}
+
+	}
+	
+	void removeTab(int i) {
+		synchronized (tabbedPane) {
+			tabbedPane.remove(i);
+		}
+
+	}
+	
+	void removeSelectedTab() {
+		int i = tabbedPane.getSelectedIndex();
+		removeTab(i);
+	}
+	
+	int getTabIndex(String name) {
+		synchronized (tabbedPane) {
+			for (int i = tabbedPane.getTabCount(); --i >= 0;) {
+				String title = tabbedPane.getTitleAt(i);
+				if (name.equals(title)) {
+					return i;
+				}
+			}
+		}
+		return -1;
+	}
+	
+	int getTabIndex(File file) {
+		String path = XML.forwardSlash(file.getAbsolutePath());
+		synchronized (tabbedPane) {
+			for (int i = tabbedPane.getTabCount(); --i >= 0;) {
+				SunTabPanel next = ((SunTabPanel) tabbedPane.getComponentAt(i));
+				String nextPath = XML.forwardSlash(next.tab.myFile.getAbsolutePath());
+				if (path.equals(nextPath)) {
+					return i;
+				}
+			}
+		}
+		return - 1;
+	}
+			
+	SunTabPanel getTabPanel(int i) {
+		if (i < 0 || i >= tabbedPane.getTabCount())
+			return null;
+		return ((SunTabPanel) tabbedPane.getComponentAt(i));
+	}
+				
+	SunTabPanel getSelectedTabPanel() {
+		int i = tabbedPane.getSelectedIndex();
+		return getTabPanel(i);
+	}
+				
+	SunTab getTab(int i) {
+		SunTabPanel panel = getTabPanel(i);
+		return panel == null? null: panel.tab;
+	}
+				
+	SunTab getSelectedTab() {
+		SunTabPanel panel = getSelectedTabPanel();
+		return panel == null? null: panel.tab;
+	}
+				
+	/**
+	 * main method, params unused
+	 */
+	public static void main(String[] params) {
+		SunFrame frame = new SunFrame();
+		SunTab tab = new SunTab();
+		tab.isLoading = true;
+		frame.addTab(tab, null);
+		String textData = ResourceLoader.getString(SunTab.RESOURCE_PATH + SunTab.defaultSunData);
+		tab.loadSunDataFromText(textData); // creates new SunMoment if successful		
+		tab.updateReflections();
+		tab.when.setDayOfYear(SunTab.DEFAULT_DAY_OF_YEAR);
+		tab.when.setTime(SunTab.DEFAULT_HOUR);
+		BufferedImage image = ResourceLoader.getBufferedImage(
+				SunTab.RESOURCE_PATH + SunPlottingPanel.defaultMapImage); 
+		if (image != null) {
+			MapImage map = new MapImage(image);
+			tab.plot.setMap(map);
+			tab.plot.getMap().setOrigin(
+					SunPlottingPanel.defaultMapOrigin[0], 
+					SunPlottingPanel.defaultMapOrigin[1]);
+			tab.plot.getMap().setScaleWithFixedOrigin(
+					SunPlottingPanel.defaultMapScale);			
+		}
+		tab.refreshViews();
+		tab.isLoading = false;
+		frame.pack();
+		frame.refreshDisplay();
+		frame.setVisible(true);
+	}
+	
 	
 	/**
 	 * Creates the GUI
@@ -134,212 +232,137 @@ public class SunFrame extends JFrame {
 		
 		JPanel contentPane = new JPanel(new BorderLayout());
 		setContentPane(contentPane);
-		
-		toolbar = new JToolBar();
-		toolbar.setFloatable(false);
-		toolbar.setBackground(app.plot.getBackground());
-		
-		JSplitPane leftRightSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-		leftRightSplit.setDividerSize(6);
-		leftRightSplit.setResizeWeight(0.33);
-//		leftRightSplit.setEnabled(false);
-		getContentPane().add(leftRightSplit, BorderLayout.CENTER);
-		
-		JSplitPane topBottomSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-		topBottomSplit.setDividerSize(3);
-		topBottomSplit.setResizeWeight(0.95);
-		topBottomSplit.setEnabled(false);
-		
-		leftRightSplit.setRightComponent(topBottomSplit);
-		leftRightSplit.setLeftComponent(app.controls);
-		
-		JPanel plotPanel = new JPanel(new BorderLayout());
-		plotPanel.add(app.plot, BorderLayout.CENTER);
-		plotPanel.add(toolbar, BorderLayout.NORTH);
-
-		topBottomSplit.setTopComponent(plotPanel);
-		topBottomSplit.setBottomComponent(app.pvDrawingPanel);
-		
-		showTracksCheckbox = new JCheckBox();
-		showTracksCheckbox.setOpaque(false);
-		showTracksCheckbox.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 6));
-		showTracksCheckbox.setAction(new AbstractAction() {
-			public void actionPerformed(ActionEvent e) {
-				app.plot.setTracksVisible(showTracksCheckbox.isSelected());
-			}				
-		});
-		
-		zoomButton = new OSPButton();
-		zoomButton.setAction(new AbstractAction() {
-			public void actionPerformed(ActionEvent e) {
-				MapImage map = app.plot.map;
-				if (map != null) {
-					app.plot.pvPanel.setInflation(0.2);
-					app.plot.repaint();
-					
-					double scale = map.getScale();
-					// determine current slider scale power
-					double power = Math.log(scale) / Math.log(SunApp.ZOOM_FACTOR);
-					int n = app.round(60 + power);
-					n = Math.min(80, Math.max(0, n));
-					
-					JPopupMenu popup = new JPopupMenu();
-					JSlider zoomSlider = new JSlider(JSlider.HORIZONTAL, 0, 80, n);
-					zoomSlider.addChangeListener(ev -> {
-						int p = zoomSlider.getValue() - 60;
-						double z = Math.pow(SunApp.ZOOM_FACTOR, p);
-						map.setScaleWithFixedOrigin(z);
-						app.plot.repaint();
-			    });
-			    popup.add(zoomSlider);
-			    popup.show(zoomButton, -50, zoomButton.getHeight());
-				}				
-			}				
-		});
-
-		mapLabel = new JLabel("Map:");
-		mapDragLabel = new JLabel("drag to move");
-		
-		buildToolbar();
-		
+		tabbedPane = new JTabbedPane(SwingConstants.BOTTOM);
+		contentPane.add(tabbedPane, BorderLayout.CENTER);
 		createMenuBar();
-		pack();
-		leftRightSplit.setDividerLocation(0.42);
-		topBottomSplit.setDividerLocation(0.65);
 	}
 	
 	/**
-	 * Rebuilds the toobar.
-	 */
-	void buildToolbar() {
-		toolbar.removeAll();
-		toolbar.add(Box.createHorizontalStrut(2));
-		toolbar.add(showTracksCheckbox);
-		toolbar.add(Box.createHorizontalGlue());
-		if (app.plot.map != null) {
-			toolbar.add(mapLabel);
-			toolbar.add(zoomButton);
-			toolbar.add(mapDragLabel);
-			toolbar.add(Box.createHorizontalStrut(8));
-		}
-	}
-	
-	/**
-	 * Refreshes the frame controls to reflect the current settings.
+	 * Refreshes the display to reflect the current settings.
 	 */
 	void refreshDisplay() {
-		showTracksCheckbox.setSelected(app.plot.isTracksVisible());
-		zoomButton.setIcon(app.zoomIcon);
-		zoomButton.setToolTipText("Resize the map image");
-		showTracksCheckbox.setText("Show tracks");
-		showTracksCheckbox.setToolTipText("Show the sun and reflection sky tracks");
-
-		sunBlockEnabledCheckbox.setSelected(app.sunBlock.isEnabled());
-		closeImageItem.setEnabled(app.plot.map != null);
-		mapAlphaMenu.setEnabled(app.plot.map != null);
-		mapAlphaSlider.setValue(app.plot.mapAlpha);
-		
-		mapLabel.setEnabled(app.plot.map != null && app.plot.map.isVisible());
-		mapDragLabel.setEnabled(app.plot.map != null && app.plot.map.isVisible());
-		showTracksCheckbox.setEnabled(app.sunAzaltData != null);
-		sunDataMenu.setToolTipText("<HTML><p>Current sun data:<br>   Latitude "+app.latitude+
-				"<br>   Longitude "+app.longitude+"<br>Time zone "+app.timeZone+"</p>");
-
-		saveItem.setEnabled(myFile != null);
-		buildToolbar();
+		int i = tabbedPane.getSelectedIndex();
+		saveItem.setText("Save "+(i<0? "": "\"" + tabbedPane.getTitleAt(i)+ "\""));
+		saveItem.setEnabled(i >= 0);
+		closeTabItem.setText("Close "+(i<0? "": "\"" + tabbedPane.getTitleAt(i)+ "\""));
+		closeTabItem.setEnabled(i >= 0);
+		SunTabPanel panel = getSelectedTabPanel();
+		if (panel != null)
+			panel.refreshDisplay();
 	}
 		
   /**
    * Creates the menu bar.
    */
   protected void createMenuBar() {
+		fileMenu = new JMenu("File");
+		editMenu = new JMenu("Edit");
+		helpMenu = new JMenu("Help"); //$NON-NLS-1$
+
   	int keyMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMask();		
-  	openItem = new JMenuItem("Open..."); //$NON-NLS-1$
+  	newTabItem = new JMenuItem("New Tab"); //$NON-NLS-1$
+  	newTabItem.setAccelerator(KeyStroke.getKeyStroke('N', keyMask));
+  	newTabItem.addActionListener((e) -> {
+			SunTab tab = new SunTab();
+			tab.isLoading = true;
+			addTab(tab, null);
+			String textData = ResourceLoader.getString(SunTab.RESOURCE_PATH + SunTab.defaultSunData);
+			tab.loadSunDataFromText(textData); // creates new SunMoment if successful		
+			tab.updateReflections();
+			tab.when.setDayOfYear(SunTab.DEFAULT_DAY_OF_YEAR);
+			tab.when.setTime(SunTab.DEFAULT_HOUR);
+			tabbedPane.setSelectedIndex(tabbedPane.getTabCount()-1);
+			tab.isLoading = false;
+			tab.refreshViews();
+		});
+
+  	openItem = new JMenuItem("Open Tab..."); //$NON-NLS-1$
 		openItem.setAccelerator(KeyStroke.getKeyStroke('O', keyMask));
 		openItem.addActionListener((e) -> {
 			open();
 		});
 
+  	closeTabItem = new JMenuItem("Close"); //$NON-NLS-1$
+  	closeTabItem.addActionListener((e) -> {
+			removeSelectedTab();
+		});
+
 		saveItem = new JMenuItem("Save"); //$NON-NLS-1$
 		saveItem.setAccelerator(KeyStroke.getKeyStroke('S', keyMask));
 		saveItem.addActionListener((e) -> {
-			if (myFile != null)
-				save(myFile.getAbsolutePath());
+			SunTab tab = getSelectedTab();
+			if (tab != null) {
+				if (tab.myFile != null)
+					save(tab.myFile.getAbsolutePath());
+				else
+					saveAs();
+			} 
 		});
 		
-		saveAsItem = new JMenuItem("Save As..."); //$NON-NLS-1$
+		saveAsItem = new JMenuItem("Save Tab As..."); //$NON-NLS-1$
 		saveAsItem.addActionListener((e) -> {
 			saveAs();
 		});
 		
-		fileMenu = new JMenu("File");
-		fileMenu.add(openItem);
-		fileMenu.add(saveItem);
-		fileMenu.add(saveAsItem);
-		
-		loadSunDataItem = new JMenuItem("Load Data..."); //$NON-NLS-1$
-		loadSunDataItem.addActionListener((e) -> {
-			loadSunData();
-			refreshDisplay();
-		});
-		sunDataMenu = new JMenu("Sun");
-		sunDataMenu.add(loadSunDataItem);
-
-		openImageItem = new JMenuItem("Open Image..."); //$NON-NLS-1$
+		openImageItem = new JMenuItem("Open Map..."); //$NON-NLS-1$
 		openImageItem.addActionListener((e) -> {
 			openImage();
 			refreshDisplay();
 		});
 
-		pasteImageItem = new JMenuItem("Paste Image"); //$NON-NLS-1$
+		closeImageItem = new JMenuItem("Close Map"); //$NON-NLS-1$
+		closeImageItem.addActionListener((e) -> {
+			SunTab tab = getSelectedTab();
+			if (tab != null) {
+				tab.plot.setMap(null);
+				tab.plot.repaint();
+				refreshDisplay();
+			}
+		});
+		
+		fileMenu.add(newTabItem);
+		fileMenu.addSeparator();
+		fileMenu.add(openItem);
+		fileMenu.add(closeTabItem);
+		fileMenu.addSeparator();
+		fileMenu.add(saveItem);
+		fileMenu.add(saveAsItem);
+		fileMenu.addSeparator();
+		fileMenu.add(openImageItem);
+		fileMenu.addSeparator();
+		fileMenu.add(closeImageItem);
+		
+		pasteImageItem = new JMenuItem("Paste Map"); //$NON-NLS-1$
+		pasteImageItem.setAccelerator(KeyStroke.getKeyStroke('V', keyMask));
 		pasteImageItem.addActionListener((e) -> {
 			pasteImage();
 			refreshDisplay();
 		});
 		
-		closeImageItem = new JMenuItem("Close Image"); //$NON-NLS-1$
-		closeImageItem.addActionListener((e) -> {
-			app.plot.setMap(null);
-			app.plot.repaint();
+		skylineEditItem = new JMenuItem("Skyline..."); //$NON-NLS-1$
+		skylineEditItem.setAccelerator(KeyStroke.getKeyStroke('D', keyMask));
+		skylineEditItem.addActionListener((e) -> {
+			SunTab tab = getSelectedTab();
+			if (tab != null) {
+				tab.sunBlock.setEnabled(true);
+				tab.sunBlock.edit();
+				tab.tabPanel.refreshDisplay();
+				tab.plot.repaint();
+			}
+		});
+    		
+		loadSunDataItem = new JMenuItem("Sun Data..."); //$NON-NLS-1$
+		loadSunDataItem.addActionListener((e) -> {
+			loadSunData();
 			refreshDisplay();
 		});
 		
-		mapAlphaMenu = new JMenu("Opacity"); //$NON-NLS-1$
-		
-		mapMenu = new JMenu("Map");
-		mapMenu.add(openImageItem);
-		mapMenu.add(pasteImageItem);
-		mapMenu.add(closeImageItem);
-		mapMenu.addSeparator();
-		mapMenu.add(mapAlphaMenu);
-		mapAlphaSlider = new JSlider(JSlider.HORIZONTAL, 0, 255, app.plot.mapAlpha);
-		mapAlphaSlider.addChangeListener(e -> {
-      app.plot.setMapAlpha(mapAlphaSlider.getValue());
-    });
-    mapAlphaMenu.add(mapAlphaSlider);
-    mapMenu.add(mapAlphaMenu);
-		
-		
-		sunBlockEnabledCheckbox = new JCheckBoxMenuItem("Enabled"); //$NON-NLS-1$
-		sunBlockEnabledCheckbox.setSelected(app.sunBlock.isEnabled());
-		sunBlockEnabledCheckbox.addActionListener((e) -> {
-			app.sunBlock.setEnabled(sunBlockEnabledCheckbox.isSelected());
-			app.refreshViews();
-		});
-		shadeEditItem = new JMenuItem("Edit..."); //$NON-NLS-1$
-		shadeEditItem.setAccelerator(KeyStroke.getKeyStroke('M', keyMask));
-		shadeEditItem.addActionListener((e) -> {
-			app.sunBlock.setEnabled(true);
-			app.sunBlock.edit();
-			refreshDisplay();
-			app.plot.repaint();
-		});
-    
-		sunBlockMenu = new JMenu("Mountains");
-		sunBlockMenu.add(sunBlockEnabledCheckbox);
-		sunBlockMenu.add(shadeEditItem);
-		
-		helpMenu = new JMenu("Help"); //$NON-NLS-1$
+		editMenu.add(pasteImageItem);
+		editMenu.addSeparator();
+		editMenu.add(skylineEditItem);
+		editMenu.addSeparator();
+		editMenu.add(loadSunDataItem);
+
 		JMenuItem aboutItem = new JMenuItem("About..."); //$NON-NLS-1$
 		aboutItem.addActionListener((e) -> {
 			showAboutDialog();
@@ -350,9 +373,7 @@ public class SunFrame extends JFrame {
 		setJMenuBar(menuBar);
     menuBar.removeAll();
     menuBar.add(fileMenu);
-    menuBar.add(sunDataMenu);
-    menuBar.add(mapMenu);
-    menuBar.add(sunBlockMenu);
+    menuBar.add(editMenu);
     menuBar.add(helpMenu);
     
 		menuListener = new MenuListener() {
@@ -375,11 +396,11 @@ public class SunFrame extends JFrame {
 			public void menuCanceled(MenuEvent e) {}
 			
 		};
-		mapMenu.addMenuListener(menuListener);
+		editMenu.addMenuListener(menuListener);
   }
   
 	/**
-	 * Opens a Sun Reflector zip file or warns if file is not valid.
+	 * Opens a Sun Reflector tab (zip file) or warns if file is not valid.
 	 */  
 	public void open() {
 		AsyncFileChooser chooser = OSPRuntime.getChooser();
@@ -393,8 +414,8 @@ public class SunFrame extends JFrame {
 		chooser.setDialogTitle("Open");
 		chooser.resetChoosableFileFilters();
 		chooser.setAcceptAllFileFilterUsed(false);
-		chooser.addChoosableFileFilter(SunApp.zipFileFilter);
-		chooser.setFileFilter(SunApp.zipFileFilter);
+		chooser.addChoosableFileFilter(SunTab.zipFileFilter);
+		chooser.setFileFilter(SunTab.zipFileFilter);
 		Runnable ok = new Runnable() {
 			@Override
 			public void run() {
@@ -445,7 +466,7 @@ public class SunFrame extends JFrame {
 	public void open(File file) {
 		File theFile = file;
 		// check for zip file and open the xml file inside, if any
-		if (SunApp.zipFileFilter.accept(file)) {
+		if (SunTab.zipFileFilter.accept(file)) {
 			String path = file.getAbsolutePath();
 			path = XML.forwardSlash(path);
 			Map<String, ZipEntry> contents = ResourceLoader.getZipContents(path, true);
@@ -454,8 +475,8 @@ public class SunFrame extends JFrame {
 					ZipEntry entry = contents.get(key);
 					String name = entry.getName();
 					if (name != null && name.toLowerCase().endsWith(".xml")) {
-						SunApp.zipFilePath = file.getAbsolutePath() + "!/";
-						name = SunApp.zipFilePath + name;
+						SunTab.zipFilePath = file.getAbsolutePath() + "!/";
+						name = SunTab.zipFilePath + name;
 						file = new File(name);
 						break;
 					}
@@ -464,38 +485,47 @@ public class SunFrame extends JFrame {
 			path = XML.forwardSlash(file.getAbsolutePath());
 			XMLControlElement control = new XMLControlElement(path);
 			Class<?> type = control.getObjectClass();
-			if (type == SunApp.class) {
-				control.loadObject(app);
-				myFile = theFile;
+			if (type == SunTab.class) {
+				SunTab tab = (SunTab)control.loadObject(null);
+				tab.myFile = theFile;
+				String zipName = SunTab.zipFilePath.substring(0, SunTab.zipFilePath.length() - 2);
+				zipName = XML.forwardSlash(zipName);
+				int n = zipName.lastIndexOf("/");
+				zipName = zipName.substring(n+1, zipName.length());
+				addTab(tab, zipName);
+				tabbedPane.setSelectedIndex(tabbedPane.getTabCount()-1);
 				refreshDisplay();
 			}
 			else {
 				// show warning dialog
-				JOptionPane.showMessageDialog(app.frame, 
-						"\""+theFile.getName()+"\" is not a SunReflector file.", //$NON-NLS-1$
+				JOptionPane.showMessageDialog(this, 
+						"\""+theFile.getName()+"\" is not a SunReflector tab file.", //$NON-NLS-1$
 						"Error", //$NON-NLS-1$
 						JOptionPane.WARNING_MESSAGE);
 			}
 		}
-		else if (SunApp.imageFileFilter.accept(file)){
+		else if (SunTab.imageFileFilter.accept(file)){
 			String path = file.getAbsolutePath();
-			SunPlottingPanel plot = app.plot;
-			MapImage map = new MapImage(path);
-			if (map.getImagePath() != null) {
-				plot.setMap(map);
-				plot.repaint();
-			}
-			else {
-				// show warning dialog
-				JOptionPane.showMessageDialog(app.frame, 
-						"\""+theFile.getName()+"\" is not a readable image file.", //$NON-NLS-1$
-						"Error", //$NON-NLS-1$
-						JOptionPane.WARNING_MESSAGE);
+			SunTab tab = getSelectedTab();
+			if (tab != null) {
+				SunPlottingPanel plot = tab.plot;
+				MapImage map = new MapImage(path);
+				if (map.getImagePath() != null) {
+					plot.setMap(map);
+					plot.repaint();
+				}
+				else {
+					// show warning dialog
+					JOptionPane.showMessageDialog(this, 
+							"\""+theFile.getName()+"\" is not a readable image file.", //$NON-NLS-1$
+							"Error", //$NON-NLS-1$
+							JOptionPane.WARNING_MESSAGE);
+				}
 			}
 		}
 		else {
 			// show warning dialog
-			JOptionPane.showMessageDialog(app.frame, 
+			JOptionPane.showMessageDialog(this, 
 					"\""+theFile.getName()+"\" is not a SunReflector file.", //$NON-NLS-1$
 					"Error", //$NON-NLS-1$
 					JOptionPane.WARNING_MESSAGE);
@@ -515,8 +545,8 @@ public class SunFrame extends JFrame {
 		chooser.setDialogTitle("Save As");
 		chooser.resetChoosableFileFilters();
 		chooser.setAcceptAllFileFilterUsed(false);
-		chooser.addChoosableFileFilter(SunApp.zipFileFilter);
-		chooser.setFileFilter(SunApp.zipFileFilter);
+		chooser.addChoosableFileFilter(SunTab.zipFileFilter);
+		chooser.setFileFilter(SunTab.zipFileFilter);
 		
 		Runnable ok = new Runnable() {
 			@Override
@@ -556,20 +586,24 @@ public class SunFrame extends JFrame {
 	 * @param zipFilePath the path
 	 */
 	public void save(String zipFilePath) {
+		SunTab tab = getSelectedTab();
+		if (tab == null)
+			return;
+
 		String baseName = XML.stripExtension(XML.getName(zipFilePath));
 		tempDir = getTempDirectory();
 		filesToZip.clear();
 		
 		// write or copy MapImage images to temp directory, add to filesToZip list
-		if (app.plot.map != null) {
-			File imageFile = saveTempImage(app.plot.map, baseName+"_map.jpg");
+		if (tab.plot.map != null) {
+			File imageFile = saveTempImage(tab.plot.map, baseName+"_map.jpg");
 			if (imageFile != null && imageFile.exists()) {
-				app.plot.map.tempImageName = imageFile.getName();
+				tab.plot.map.tempImageName = imageFile.getName();
 				filesToZip.add(imageFile);
 			}
 		}		
-		for (int i = 0; i < app.sunBlock.images.size(); i++) {
-			MapImage img = app.sunBlock.images.get(i);
+		for (int i = 0; i < tab.sunBlock.images.size(); i++) {
+			MapImage img = tab.sunBlock.images.get(i);
 			File imageFile = saveTempImage(img, baseName+"_block.jpg");
 			if (imageFile != null && imageFile.exists()) {
 				img.tempImageName = imageFile.getName();
@@ -577,7 +611,7 @@ public class SunFrame extends JFrame {
 			}
 		}
 		// write xml file to temp directory and add to filesToZip list
-		XMLControl xml = new XMLControlElement(app);		
+		XMLControl xml = new XMLControlElement(tab);		
 		File xmlFile = new File(tempDir, baseName+".xml");
 		xml.write(xmlFile.getAbsolutePath());
 		if (xmlFile.exists())
@@ -586,7 +620,7 @@ public class SunFrame extends JFrame {
 		// now zip the files in fileToZip list and save, then delete the tempDir
 		File target = new File(zipFilePath);
 		if (JarTool.compress(filesToZip, target, null)) {
-			myFile = target;
+			tab.myFile = target;
 			OSPRuntime.trigger(1000, (e) -> {
 				ResourceLoader.deleteFile(new File(tempDir));
 			});
@@ -597,17 +631,20 @@ public class SunFrame extends JFrame {
 	 * Opens a dialog to load new data from the NOAA spreadsheet
 	 */
 	public void loadSunData() {
-		// show dialog to load sun data from NOAA
-		NOAAReader reader = new NOAAReader(app);
-		NOAAReaderControl control = new NOAAReaderControl(reader);
-		if (control.ready)
-			control.setVisible(true);
-		else 
-			// show warning dialog
-			JOptionPane.showMessageDialog(app.frame, 
-					"The spreadsheet \""+ XML.getName(reader.pathToNOAA)+"\" was not found.", //$NON-NLS-1$
-					"File Not Found", //$NON-NLS-1$
-					JOptionPane.WARNING_MESSAGE);
+		SunTab tab = getSelectedTab();
+		if (tab != null) {
+			// show dialog to load sun data from NOAA
+			NOAAReader reader = new NOAAReader(tab);
+			NOAAReaderControl control = new NOAAReaderControl(reader);
+			if (control.ready)
+				control.setVisible(true);
+			else 
+				// show warning dialog
+				JOptionPane.showMessageDialog(tab.frame, 
+						"The spreadsheet \""+ XML.getName(reader.pathToNOAA)+"\" was not found.", //$NON-NLS-1$
+						"File Not Found", //$NON-NLS-1$
+						JOptionPane.WARNING_MESSAGE);
+		}
 	}
 
 	/**
@@ -661,8 +698,8 @@ public class SunFrame extends JFrame {
 		chooser.setDialogTitle("Open Map Image");
 		chooser.resetChoosableFileFilters();
 		chooser.setAcceptAllFileFilterUsed(false);
-		chooser.addChoosableFileFilter(SunApp.imageFileFilter);
-		chooser.setFileFilter(SunApp.imageFileFilter);
+		chooser.addChoosableFileFilter(SunTab.imageFileFilter);
+		chooser.setFileFilter(SunTab.imageFileFilter);
 		Runnable ok = new Runnable() {
 			@Override
 			public void run() {
@@ -693,14 +730,18 @@ public class SunFrame extends JFrame {
 	 * Pastes a map image from the clipboard.
 	 */
 	public void pasteImage() {
+		SunTab tab = getSelectedTab();
+		if (tab == null) 
+			return;
+		
 		Transferable t = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
 		try {
 			if (t != null && t.isDataFlavorSupported(DataFlavor.imageFlavor)) {
 				Image image = (Image) t.getTransferData(DataFlavor.imageFlavor);
 				if (image != null) {
 					MapImage map = new MapImage(image);
-					app.plot.setMap(map);
-					app.plot.repaint();
+					tab.plot.setMap(map);
+					tab.plot.repaint();
 				}
 			}
 		} catch (Exception ex) {
@@ -713,7 +754,7 @@ public class SunFrame extends JFrame {
 	 */
 	public void showAboutDialog() {
 		String date = OSPRuntime.getLaunchJarBuildDate();		
-		String aboutString = "Sun Reflector " + app.version 
+		String aboutString = "Sun Reflector " + SunFrame.version 
 				+ "\nBuild date " + date //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 				+ "\nCopyright (c) 2023 Douglas Brown"
 				+ "\nhttps://github.com/dobrown";
@@ -789,27 +830,31 @@ public class SunFrame extends JFrame {
         } catch(Exception ex){}
       }
     });
-		new DropTarget(app.controls.info, new DropTargetListener(){			
-      public void dragEnter(DropTargetDragEvent e){}      
-      public void dragExit(DropTargetEvent e){}      
-      public void dragOver(DropTargetDragEvent e){}      
-      public void dropActionChanged(DropTargetDragEvent e){}
-      
-      @SuppressWarnings("unchecked")
-			public void drop(DropTargetDropEvent e){
-        try {
-            // accept the drop first, important!
-            e.acceptDrop(DnDConstants.ACTION_COPY_OR_MOVE);            
-            // get the list of dropped files
-            List<Object> list=(List<Object>) e.getTransferable().
-            		getTransferData(DataFlavor.javaFileListFlavor);           
-            // open the first file in the list
-            File file = (File)list.get(0);
-            open(file);
-            
-        } catch(Exception ex){}
-      }
-    });
+		
+		SunTab tab = getSelectedTab();
+		if (tab != null) {
+			new DropTarget(tab.controls.info, new DropTargetListener(){			
+	      public void dragEnter(DropTargetDragEvent e){}      
+	      public void dragExit(DropTargetEvent e){}      
+	      public void dragOver(DropTargetDragEvent e){}      
+	      public void dropActionChanged(DropTargetDragEvent e){}
+	      
+	      @SuppressWarnings("unchecked")
+				public void drop(DropTargetDropEvent e){
+	        try {
+	            // accept the drop first, important!
+	            e.acceptDrop(DnDConstants.ACTION_COPY_OR_MOVE);            
+	            // get the list of dropped files
+	            List<Object> list=(List<Object>) e.getTransferable().
+	            		getTransferData(DataFlavor.javaFileListFlavor);           
+	            // open the first file in the list
+	            File file = (File)list.get(0);
+	            open(file);
+	            
+	        } catch(Exception ex){}
+	      }
+	    });
+		}
   }
 	
 }

@@ -48,6 +48,7 @@ public class MapImage extends MeasuredImage {
 	 * @param path a image path
 	 */
 	public MapImage(String path) {
+		path = XML.forwardSlash(path);
 		BufferedImage mapImage = ResourceLoader.getBufferedImage(path);
 		if (mapImage != null) {
 			setImage(mapImage); // also sets imagePath to null
@@ -213,6 +214,9 @@ public class MapImage extends MeasuredImage {
 		public void saveObject(XMLControl control, Object obj) {
 			MapImage map = (MapImage)obj;
 			control.setValue("name", map.tempImageName);
+			if (map.tempImageName == null) {
+				control.setValue("path", map.imagePath);
+			}
 			control.setValue("origin", map.getOrigin());
 			control.setValue("scale", map.getScale());			
 		}
@@ -226,7 +230,13 @@ public class MapImage extends MeasuredImage {
 		@Override
 		public Object createObject(XMLControl control) {
 			if (control.getPropertyNamesRaw().contains("name")) {
-				String path = SunApp.zipFilePath + control.getString("name");
+				String path = SunTab.zipFilePath + control.getString("name");
+				MapImage map = new MapImage(path);
+				if (map.image != null)
+					return map;
+			}
+			else if (control.getPropertyNamesRaw().contains("path")) {
+				String path = control.getString("path");
 				MapImage map = new MapImage(path);
 				if (map.image != null)
 					return map;

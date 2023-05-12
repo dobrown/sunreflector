@@ -47,7 +47,7 @@ import org.opensourcephysics.numerics.Quaternion;
  */
 public class PVView extends SunPoint {
 	
-	SunApp app;
+	SunTab tab;
 	DrawingPanel drawingPanel;
 	
 	double[][] pvVertices;
@@ -85,14 +85,14 @@ public class PVView extends SunPoint {
 	/**
 	 * Constructor
 	 * 
-	 * @param app the SunApp
+	 * @param tab the SunApp
 	 * @param panel the panel this will be drawn on
 	 * @param x the x-position on the panel
 	 * @param y the y-position on the panel
 	 */
-	public PVView(SunApp app, DrawingPanel panel, double x, double y) {
+	public PVView(SunTab tab, DrawingPanel panel, double x, double y) {
 		super(panel, x, y);
-		this.app = app;
+		this.tab = tab;
 		drawingPanel = panel;
 		rayTransform = new AffineTransform();
 		arrowTransform = new AffineTransform();
@@ -168,7 +168,7 @@ public class PVView extends SunPoint {
 		double[] xyz = getPVViewCoords(normal);
 		line.setLine(0,  0,  xyz[0], xyz[1]);
 		Shape shape = transform.createTransformedShape(line);
-		g2.setStroke(app.getStroke(2f));
+		g2.setStroke(tab.getStroke(2f));
 		g2.setColor(Color.BLUE);
 		g2.draw(shape);
 
@@ -187,7 +187,7 @@ public class PVView extends SunPoint {
 	private void drawRotationAxes(boolean nearOnly) {
 		g2.setStroke(new BasicStroke(2));
 		for (int i = 0; i < 3; i++) {
-			if (app.visibleRotationAxis == i) {
+			if (tab.visibleRotationAxis == i) {
 				double[][] ends = getAxisCoords(axes[i]);			
 				Shape shape = null;
 				// if axis straight up z, draw circle
@@ -200,7 +200,7 @@ public class PVView extends SunPoint {
 					}
 				}
 				if (nearOnly) {
-					if (i == 2 || (i == 1 && app.reflector.dip == 0)) {
+					if (i == 2 || (i == 1 && tab.reflector.dip == 0)) {
 						if (!isFrontVisible) {
 							continue;
 						}
@@ -222,7 +222,7 @@ public class PVView extends SunPoint {
 				if (shape == null) {
 					shape = transform.createTransformedShape(line);
 				}
-				g2.setStroke(app.getStroke(4));
+				g2.setStroke(tab.getStroke(4));
 				g2.setColor(Color.MAGENTA);
 				g2.draw(shape);
 			}				
@@ -284,11 +284,11 @@ public class PVView extends SunPoint {
 	 * @param hasGlare true if direct glare is present at the camera
 	 */
 	protected void drawRays(boolean hasGlare) {
-		double[][] rayData = app.getRayData(app.when.getTimeIndex()); // sun and reflection		
+		double[][] rayData = tab.getRayData(tab.when.getTimeIndex()); // sun and reflection		
 		if (rayData == null)
 			return;
-		Color[][] rayColors = app.getRayColors(rayData);
-		boolean[] vis = app.getRayVisibility(app.when.getTimeIndex());
+		Color[][] rayColors = tab.getRayColors(rayData);
+		boolean[] vis = tab.getRayVisibility(tab.when.getTimeIndex());
 
 		// first the sun ray, if visible
 		if (vis[0]) {
@@ -298,12 +298,12 @@ public class PVView extends SunPoint {
 								
 			Shape shape = rayTransform.createTransformedShape(line);
 			// draw wide outer line
-			g2.setStroke(app.getStroke(5f));
+			g2.setStroke(tab.getStroke(5f));
 			g2.setColor(rayColors[0][0]);
 			g2.draw(shape);			
 
 			// draw narrow inner line
-			g2.setStroke(app.getStroke(0.7f));
+			g2.setStroke(tab.getStroke(0.7f));
 			g2.setColor(rayColors[0][1]);
 			g2.draw(shape);
 			
@@ -317,7 +317,7 @@ public class PVView extends SunPoint {
 			arrowTransform.rotate(3*Math.PI/2-theta);
 			Shape arrow = arrowTransform.createTransformedShape(arrowhead);
 			g2.setColor(rayColors[0][1]);
-			g2.setStroke(app.getStroke(1.4f));
+			g2.setStroke(tab.getStroke(1.4f));
 			g2.draw(arrow);
 			g2.fill(arrow);
 		}
@@ -332,12 +332,12 @@ public class PVView extends SunPoint {
 			double len = getRayLength(azAlt, xyz);
 			line.setLine(0,  0,  len*xyz[0], len*xyz[1]);
 			Shape shape = rayTransform.createTransformedShape(line);
-			g2.setStroke(app.getStroke(3f));
+			g2.setStroke(tab.getStroke(3f));
 			g2.setColor(rayColors[1][0]);
 			g2.draw(shape);
 			
 			// draw narrow blue
-			g2.setStroke(app.getStroke(0.7f));
+			g2.setStroke(tab.getStroke(0.7f));
 			g2.setColor(rayColors[1][1]);
 			g2.draw(shape);
 			
@@ -351,7 +351,7 @@ public class PVView extends SunPoint {
 			arrowTransform.rotate(Math.PI/2-theta);
 			Shape arrow = arrowTransform.createTransformedShape(arrowhead);
 			g2.setColor(rayColors[1][1]);
-			g2.setStroke(app.getStroke(1.4f));
+			g2.setStroke(tab.getStroke(1.4f));
 			g2.draw(arrow);
 			g2.fill(arrow);
 		}
@@ -402,7 +402,7 @@ public class PVView extends SunPoint {
 		rayTransform.translate(myScreenLoc.x, myScreenLoc.y);
 		rayTransform.scale(scale, scale);
 		
-		boolean[] vis = app.getRayVisibility(app.when.getTimeIndex());
+		boolean[] vis = tab.getRayVisibility(tab.when.getTimeIndex());
 		
 		getVisibleFaces();
 		drawBackground();
@@ -436,11 +436,11 @@ public class PVView extends SunPoint {
 	 */
 	protected Quaternion applyPVRotations(Quaternion q) {
 		// rotate about Y_NORTH
-		q = SunReflector.rotate(q, SunReflector.Y_NORTH, app.reflector.tilt);
+		q = SunReflector.rotate(q, SunReflector.Y_NORTH, tab.reflector.tilt);
 		// rotate about dip axis
-		q = SunReflector.rotate(q, dipAxis, app.reflector.dip);
+		q = SunReflector.rotate(q, dipAxis, tab.reflector.dip);
 		// rotate about Z_UP
-		q = SunReflector.rotate(q, SunReflector.Z_UP, -app.reflector.tiltAxisAzimuth);
+		q = SunReflector.rotate(q, SunReflector.Z_UP, -tab.reflector.tiltAxisAzimuth);
 		return q;
 	}
 	
@@ -466,7 +466,7 @@ public class PVView extends SunPoint {
 	private void refreshPVViewCoords() {
 		// set up dip axis by rotating X_EAST about Y_NORTH by tilt angle
 		dipAxis = SunReflector.rotate(SunReflector.X_EAST, 
-				SunReflector.Y_NORTH, app.reflector.tilt);
+				SunReflector.Y_NORTH, tab.reflector.tilt);
 
 		pvViewCoords = new double[pvVertices.length][];
 		for (int i = 0; i < pvVertices.length; i++) {
@@ -558,7 +558,7 @@ public class PVView extends SunPoint {
 	    }
 	    else {
 				// rotate about UP
-				q = SunReflector.rotate(q, SunReflector.Z_UP, -app.reflector.tiltAxisAzimuth);
+				q = SunReflector.rotate(q, SunReflector.Z_UP, -tab.reflector.tiltAxisAzimuth);
 				q = applyCameraRotations(q);
 	    }
 			result[i] = getVectorCoords(q, d);			

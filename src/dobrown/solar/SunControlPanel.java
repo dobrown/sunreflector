@@ -22,21 +22,32 @@
 package dobrown.solar;
 
 import java.awt.BorderLayout;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.GridLayout;
+import java.awt.Point;
+import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
+import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.border.Border;
 import javax.swing.border.TitledBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
+import org.opensourcephysics.controls.XMLControlElement;
+import org.opensourcephysics.display.OSPButton;
 import org.opensourcephysics.tools.FunctionEditor;
 
 /**
@@ -44,22 +55,25 @@ import org.opensourcephysics.tools.FunctionEditor;
  */
 public class SunControlPanel extends JPanel {
 	
-	SunApp app;
+	SunTab tab;
 
 	JSlider dateSlider, timeSlider;
 	JLabel dateLabel, timeLabel;
+	JLabel latLabel, longLabel, timezoneLabel;
+	JTextField latField, longField, timezoneField;
 	JSlider axisSlider, rotationSlider, dipSlider;
 	JLabel axisLabel, rotationLabel, dipLabel;
 	JTextArea info;
+	JLabel loadLabel;
 	TitledBorder dataTimeTitledBorder, tiltTitledBorder;
 	
 	/**
 	 * Constructor
-	 * @param app the SunApp
+	 * @param tab the SunApp
 	 */
-	SunControlPanel(SunApp app) {
+	SunControlPanel(SunTab tab) {
 		super(new BorderLayout());
-		this.app = app;
+		this.tab = tab;
 		createGUI();
 		refreshDisplay();
 		info.setText(getInfo());		
@@ -69,23 +83,50 @@ public class SunControlPanel extends JPanel {
 	 * Creates the GUI.
 	 */
 	void createGUI() {
-		setBackground(app.plot.getBackground());
+		setBackground(tab.plot.getBackground());
 		setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
+		
+		loadLabel = new JLabel();
+		Border empty = BorderFactory.createEmptyBorder(4, 10, 4, 10);
+		Border smaller = BorderFactory.createEmptyBorder(2, 8, 2, 8);
+		Border etched = BorderFactory.createEtchedBorder();
+		Border combo = BorderFactory.createCompoundBorder(etched, smaller);
+		loadLabel.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				loadLabel.setBorder(combo);	
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e) {
+				loadLabel.setBorder(empty);	
+			}
+
+			@Override
+			public void mousePressed(MouseEvent e) {
+				if (e.getButton() == MouseEvent.BUTTON1) {
+					tab.frame.loadSunData();
+					refreshDisplay();
+				}
+			}	
+		});
+		loadLabel.setBorder(empty);	
+		
 		dateLabel = new JLabel();
 		prepLabel(dateLabel);
 		
-		dateSlider = new JSlider(0, app.dayCount-1, 0);
+		dateSlider = new JSlider(0, tab.dayCount-1, 0);
 		dateSlider.setOpaque(false);
 		dateSlider.addChangeListener(new ChangeListener() {
 			@Override
 			public void stateChanged(ChangeEvent e) {
-				if (app.isLoading)
+				if (tab.isLoading)
 					return;
 				int i = dateSlider.getValue();
-				app.when.setDayNumber(i);
+				tab.when.setDayNumber(i);
 				refreshDisplay();
-				app.refreshViews();
+				tab.refreshViews();
 			}
 
 		});
@@ -93,17 +134,17 @@ public class SunControlPanel extends JPanel {
 		timeLabel = new JLabel();
 		prepLabel(timeLabel);
 		
-		timeSlider = new JSlider(0, app.when.hours.length-1, 0);
+		timeSlider = new JSlider(0, tab.when.hours.length-1, 0);
 		timeSlider.setOpaque(false);
 		timeSlider.addChangeListener(new ChangeListener() {
 			@Override
 			public void stateChanged(ChangeEvent e) {
-				if (app.isLoading)
+				if (tab.isLoading)
 					return;
 				int i = timeSlider.getValue();
-				app.when.setTimeIndex(i);
+				tab.when.setTimeIndex(i);
 				refreshDisplay();
-				app.refreshViews();
+				tab.refreshViews();
 			}
 		});
 		
@@ -116,23 +157,23 @@ public class SunControlPanel extends JPanel {
 			@Override
 			public void stateChanged(ChangeEvent e) {
 				int i = axisSlider.getValue();
-				app.reflector.setTiltAxis(Math.toRadians(i));
+				tab.reflector.setTiltAxis(Math.toRadians(i));
 				refreshDisplay();
-				app.updateReflections();
-				app.refreshViews();
+				tab.updateReflections();
+				tab.refreshViews();
 			}
 
 		});
 		axisSlider.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mousePressed(MouseEvent e) {
-				app.visibleRotationAxis = SunApp.AXIS_UP;
-				app.refreshViews();
+				tab.visibleRotationAxis = SunTab.AXIS_UP;
+				tab.refreshViews();
 			}
 			@Override
 			public void mouseReleased(MouseEvent e) {
-				app.visibleRotationAxis = SunApp.AXIS_NONE;
-				app.refreshViews();
+				tab.visibleRotationAxis = SunTab.AXIS_NONE;
+				tab.refreshViews();
 			}
 		});
 		
@@ -145,22 +186,22 @@ public class SunControlPanel extends JPanel {
 			@Override
 			public void stateChanged(ChangeEvent e) {
 				int i = rotationSlider.getValue();
-				app.reflector.setTilt(Math.toRadians(i));
+				tab.reflector.setTilt(Math.toRadians(i));
 				refreshDisplay();
-				app.updateReflections();
-				app.refreshViews();
+				tab.updateReflections();
+				tab.refreshViews();
 			}
 		});
 		rotationSlider.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mousePressed(MouseEvent e) {
-				app.visibleRotationAxis = SunApp.AXIS_TILT;
-				app.refreshViews();
+				tab.visibleRotationAxis = SunTab.AXIS_TILT;
+				tab.refreshViews();
 			}
 			@Override
 			public void mouseReleased(MouseEvent e) {
-				app.visibleRotationAxis = SunApp.AXIS_NONE;
-				app.refreshViews();
+				tab.visibleRotationAxis = SunTab.AXIS_NONE;
+				tab.refreshViews();
 			}
 		});
 		
@@ -173,35 +214,66 @@ public class SunControlPanel extends JPanel {
 			@Override
 			public void stateChanged(ChangeEvent e) {
 				int i = dipSlider.getValue();
-				app.reflector.setDip(Math.toRadians(i));
+				tab.reflector.setDip(Math.toRadians(i));
 				refreshDisplay();
-				app.updateReflections();
-				app.refreshViews();
+				tab.updateReflections();
+				tab.refreshViews();
 			}
 		});
 		dipSlider.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mousePressed(MouseEvent e) {
-				app.visibleRotationAxis = SunApp.AXIS_DIP;
-				app.refreshViews();
+				tab.visibleRotationAxis = SunTab.AXIS_DIP;
+				tab.refreshViews();
 			}
 			@Override
 			public void mouseReleased(MouseEvent e) {
-				app.visibleRotationAxis = SunApp.AXIS_NONE;
-				app.refreshViews();
+				tab.visibleRotationAxis = SunTab.AXIS_NONE;
+				tab.refreshViews();
 			}
 		});	
 		
+		latLabel = new JLabel("latitude");
+		latField = new JTextField(4);
+		latField.setEditable(false);
+		longLabel = new JLabel("longitude");
+		longField = new JTextField(4);
+		longField.setEditable(false);
+		timezoneLabel = new JLabel("timezone");
+		timezoneField = new JTextField(2);
+		timezoneField.setEditable(false);
+		
+		
 		JPanel upper = new JPanel(new BorderLayout());
-		upper.setBackground(app.plot.getBackground());
+		upper.setBackground(tab.plot.getBackground());
 		add(upper, BorderLayout.NORTH);
 		
+		JPanel uppertop = new JPanel(new BorderLayout());
+		uppertop.setBackground(tab.plot.getBackground());
+		upper.add(uppertop, BorderLayout.NORTH);
+		
+		JPanel locPanel = new JPanel();
+		
+//		locPanel.add(loadButton);
+		locPanel.add(loadLabel);
+		locPanel.add(latLabel);
+		locPanel.add(latField);
+		locPanel.add(longLabel);
+		locPanel.add(longField);
+//		locPanel.add(timezoneLabel);
+//		locPanel.add(timezoneField);
+		locPanel.setBackground(tab.plot.getBackground());
+		TitledBorder border = BorderFactory.createTitledBorder("Location");
+		border.setTitleJustification(TitledBorder.CENTER);
+		locPanel.setBorder(border);
+		uppertop.add(locPanel, BorderLayout.NORTH);
+		
 		JPanel dateAndTimePanel = new JPanel(new GridLayout(0, 1, 0, 2));
-		dateAndTimePanel.setBackground(app.plot.getBackground());
+		dateAndTimePanel.setBackground(tab.plot.getBackground());
 		dataTimeTitledBorder = BorderFactory.createTitledBorder("Date and time");
 		dataTimeTitledBorder.setTitleJustification(TitledBorder.CENTER);
 		dateAndTimePanel.setBorder(dataTimeTitledBorder);
-		upper.add(dateAndTimePanel, BorderLayout.NORTH);
+		uppertop.add(dateAndTimePanel, BorderLayout.SOUTH);
 		
 		Box box = Box.createHorizontalBox();
 		box.add(dateLabel);
@@ -214,7 +286,7 @@ public class SunControlPanel extends JPanel {
 		dateAndTimePanel.add(box);
 
 		JPanel pvPanel = new JPanel(new GridLayout(0, 1, 0, 2));
-		pvPanel.setBackground(app.plot.getBackground());
+		pvPanel.setBackground(tab.plot.getBackground());
 		tiltTitledBorder = BorderFactory.createTitledBorder("Solar panel orientation");
 		tiltTitledBorder.setTitleJustification(TitledBorder.CENTER);
 		pvPanel.setBorder(tiltTitledBorder);
@@ -262,31 +334,41 @@ public class SunControlPanel extends JPanel {
 	 * Updates the controls and labels to reflect the current settings.
 	 */
 	void refreshDisplay() {
-		int degrees = getDegrees(app.reflector.tiltAxisAzimuth);
+		loadLabel.setIcon(SunTab.openIcon);
+		loadLabel.setToolTipText("Load sun data for another location or date/time range");
+		// should use formatter here
+		String lat = String.valueOf(tab.latitude);
+		latField.setText(lat + FunctionEditor.DEGREES);
+		String longi = String.valueOf(tab.longitude);
+		longField.setText(longi + FunctionEditor.DEGREES);
+		String zone = String.valueOf(tab.timeZone);
+		timezoneField.setText(zone);
+		
+		int degrees = getDegrees(tab.reflector.tiltAxisAzimuth);
 		axisSlider.setValue(degrees);
 		String s = "Turn " + degrees + FunctionEditor.DEGREES;
 		axisLabel.setText(s);
-		degrees = getDegrees(app.reflector.tilt);
+		degrees = getDegrees(tab.reflector.tilt);
 		rotationSlider.setValue(degrees);
 		s = "Tilt " + degrees + FunctionEditor.DEGREES;
 		rotationLabel.setText(s);
-		degrees = getDegrees(app.reflector.dip);
+		degrees = getDegrees(tab.reflector.dip);
 		dipSlider.setValue(degrees);
 		s = "Dip " + degrees + FunctionEditor.DEGREES;
 		dipLabel.setText(s);
 
-		dateSlider.setMaximum(app.dayCount-1);
-		timeSlider.setMaximum(app.when.hours.length-1);
-		int t = app.when.getTimeIndex();
-		dateSlider.setValue(app.when.getDayNumber());
+		dateSlider.setMaximum(tab.dayCount-1);
+		timeSlider.setMaximum(tab.when.hours.length-1);
+		int t = tab.when.getTimeIndex();
+		dateSlider.setValue(tab.when.getDayNumber());
 		timeSlider.setValue(t);
-		dateLabel.setText(app.when.getDateString());
-		timeLabel.setText(app.when.getTimeString());
-		dateSlider.setEnabled(app.sunAzaltData != null);
-		timeSlider.setEnabled(app.sunAzaltData != null);
-		dateLabel.setEnabled(app.sunAzaltData != null);
-		timeLabel.setEnabled(app.sunAzaltData != null);
-		dataTimeTitledBorder.setTitle(app.sunAzaltData != null? "Date and time": "No sun data loaded");
+		dateLabel.setText(tab.when.getDateString());
+		timeLabel.setText(tab.when.getTimeString());
+		dateSlider.setEnabled(tab.sunAzaltData != null);
+		timeSlider.setEnabled(tab.sunAzaltData != null);
+		dateLabel.setEnabled(tab.sunAzaltData != null);
+		timeLabel.setEnabled(tab.sunAzaltData != null);
+		dataTimeTitledBorder.setTitle(tab.sunAzaltData != null? "Date and time": "No sun data loaded");
 		repaint();
 	}
 	
@@ -306,7 +388,8 @@ public class SunControlPanel extends JPanel {
 	 * @return the info
 	 */
 	String getInfo() {
-		return "Sun Reflector simulates reflections from a solar panel."
+		return "Sun Reflector simulates sunlight incident on and"
+				+ " reflecting from a solar panel."
 				+ " Use the sliders above to turn, tilt and dip the panel."
 				+ " Its orientation is described by the azimuth"
 				+ " and altitude of its \"normal vector\", shown as a"
@@ -321,29 +404,38 @@ public class SunControlPanel extends JPanel {
 				+ " Check \"Show tracks\" to see the ray tracks across the sky"
 				+ " for the entire day."
 				+ "\n\n"
+				+ "A map image may be displayed in the overhead view to help"
+				+ " evaluate possible glare. Drag to move the map"
+				+ " or use the toolbar buttons to control its scale and opacity."
+				+ " To replace the map, drag and drop an image file,"
+				+ " paste an image from the clipboard,"
+				+ " or choose File|Open Map."
+				+ "\n\n"
 				+ "The horizontal view at the lower right shows the solar panel"
 				+ " from a viewpoint on the horizon (green arrow in the overhead view)."
 				+ " Drag the mouse horizontally to move the viewpoint."
 				+ "\n\n"
-				+ "Sun Reflector also determines the \"insolation\" (light intensity)"
-				+ " striking the panel, expressed as a percentage of the maximum."
+				+ "The \"insolation\" is the intensity of the sunlight"
+				+ " striking the panel at a given time"
+				+ " expressed as a percentage of the maximum."
 				+ " The insolation approaches 100% for small incident angles between"
 				+ " the sun ray and the normal vector."
 				+ " The total insolation over the course of a day"
 				+ " is reported as \"sun hours\"."
 				+ "\n\n"
-				+ "Mountains, trees and other obstacles that block the sun will reduce"
-				+ " the sun hours. To model these obstacles, choose Mountains|Edit."
+				+ "At some locations the skyline may reduce"
+				+ " the sun hours significantly. To account for this choose Edit|Skyline"
+				+ " and create a skyline in the Skyline Editor."
+				+ " Check \"Show skyline\" to draw the skyline in both views"
+				+ " and determine its effect on sun hours."
 				+ "\n\n"
-				+ "Sun positions are loaded from the spreadsheet"
-				+ " \"NOAA_Solar_Calculations.xls.\" See"
-				+ " https://gml.noaa.gov/grad/solcalc/calcdetails.html for more information."
-				+ " By default, the latitude/longitude/time zone are those of"
-				+ " the South Lake Tahoe CA region and the date/time ranges"
+				+ "Sun data are loaded from the NOAA solar position calculator"
+				+ " (bundled spreadsheet"
+				+ " \"NOAA_Solar_Calculations.xls\")."
+				+ " By default, the location is"
+				+ " South Lake Tahoe CA and the date/time ranges"
 				+ " are May 1-Sep 30 and 6:00 am-8:00 pm."
-				+ " Choose Sun|Load Data to load data for other locations or times."
-				+ "\n\n"
-				+ getMapInfo();
+				+ " Choose Edit|Sun Data to load data for other locations or times.";
 	}
 	
 	/**
@@ -352,13 +444,15 @@ public class SunControlPanel extends JPanel {
 	 * @return the info
 	 */
 	String getMapInfo() {
-		if (app.plot.map == null) {
-			return "Choose Map|Open Image or Map|Paste Image to display a map"
-					+ " in the background of the overhead view.";
+		if (tab.plot.map == null) {
+			return "Drag and drop an image file, paste an image from the clipboard,"
+					+ " or choose File|Open Map to add a map image"
+					+ " to the background of the overhead view.";
 		}
 		return "The default background in the overhead view is a"
 				+ " Google map image of the South Lake Tahoe region."
-				+ " Choose Map|Open Image or Map|Paste Image to change the map.";
+				+ " Drag and drop an image file, paste an image from the clipboard,"
+				+ " or choose Map|Open Image to change the map image.";
 	}
 	
 }

@@ -45,6 +45,9 @@ import java.awt.dnd.DropTargetDropEvent;
 import java.awt.dnd.DropTargetEvent;
 import java.awt.dnd.DropTargetListener;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
@@ -66,13 +69,19 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JSlider;
 import javax.swing.JToolBar;
 import javax.swing.event.MenuEvent;
 import javax.swing.event.MenuListener;
+import javax.swing.undo.AbstractUndoableEdit;
+import javax.swing.undo.CannotUndoException;
+import javax.swing.undo.UndoManager;
+import javax.swing.undo.UndoableEditSupport;
 
 import org.opensourcephysics.controls.XML;
 import org.opensourcephysics.controls.XMLControl;
+import org.opensourcephysics.controls.XMLControlElement;
 import org.opensourcephysics.display.Dataset;
 import org.opensourcephysics.display.Drawable;
 import org.opensourcephysics.display.DrawableTextLine;
@@ -90,7 +99,7 @@ import org.opensourcephysics.tools.ResourceLoader;
 import javajs.async.AsyncFileChooser;
 
 /**
- * A Drawable class that defines an altitude profile that blocks sun rays.
+ * A Drawable class that defines a skyline profile that blocks sun rays.
  *
  * @author Douglas Brown
  */
@@ -99,10 +108,10 @@ public class SunBlocker implements Drawable {
 	static int defaultAlpha = 80;
 	
 	Cursor pencil_cursor;	
-	SunApp app;
+	SunTab tab;
 	Dataset plotOutline;
-	boolean enabled = true;
-	double[] altitudes = new double[360]; // mountain altitudes at 1 degree increments
+	boolean enabled = false;
+	double[] altitudes = new double[360]; // skyline altitudes at 1 degree increments
 	double[] xOutline, yOutline; // length 722, inside+outside edges+closedPaths
 	BlockEditorDialog editor;
 	BlockPlottingPanel blockPlot; 
@@ -110,23 +119,25 @@ public class SunBlocker implements Drawable {
 	Color fillColor = new Color(50, 50, 100, 50);
 	Color edgeColor = Color.GRAY;
 	boolean invalidOutline;
+	ArrayList<MapImage> imagesInFixedOrder;
 	ArrayList<MapImage> images;
 	int imageAlpha = defaultAlpha;
 	
 	/**
 	 * Constructor
 	 * 
-	 * @param app the SunApp
+	 * @param tab the SunApp
 	 */
-	SunBlocker(SunApp app) {
-		this.app = app;
-		ImageIcon icon = ResourceLoader.getImageIcon(SunApp.RESOURCE_PATH+"pencil_cursor.gif"); //$NON-NLS-1$
+	SunBlocker(SunTab tab) {
+		this.tab = tab;
+		ImageIcon icon = ResourceLoader.getImageIcon(SunTab.RESOURCE_PATH+"pencil_cursor.gif"); //$NON-NLS-1$
 		pencil_cursor = GUIUtils.createCustomCursor(icon.getImage(), new Point(1, 15),
 				"", Cursor.MOVE_CURSOR); //$NON-NLS-1$
 		plotOutline = initPlotOutline();
 		xOutline = plotOutline.getValidXPoints();
 		yOutline = plotOutline.getValidYPoints();
 		images = new ArrayList<MapImage>();
+		imagesInFixedOrder = new ArrayList<MapImage>();
 	}
 	
 	/**
@@ -141,7 +152,7 @@ public class SunBlocker implements Drawable {
 		az = az % (Math.PI * 2);
 		if (az < 0)
 			az += Math.PI * 2;
-		return altitudes[app.round(Math.toDegrees(az))];
+		return altitudes[tab.round(Math.toDegrees(az))];
 	}
 	
 	/**
@@ -153,13 +164,13 @@ public class SunBlocker implements Drawable {
 	public void setAltitude(double az, double alt) {
 		az = Math.max(az, Math.toRadians(-180));
 		az = Math.min(az, Math.toRadians(179.1));
-		if (az < -app.ONE_DEGREE/2)
+		if (az < -tab.ONE_DEGREE/2)
 			az += 2*Math.PI;
-		if (az > 2*Math.PI-app.ONE_DEGREE/2)
+		if (az > 2*Math.PI-tab.ONE_DEGREE/2)
 			az -= 2*Math.PI;
 		alt = Math.max(alt, 0);
 		alt = Math.min(alt, Math.PI / 2);
-		altitudes[app.round(Math.toDegrees(az))] = alt;
+		altitudes[tab.round(Math.toDegrees(az))] = alt;
 		invalidOutline = true;
 	}
 	
@@ -221,8 +232,51 @@ public class SunBlocker implements Drawable {
 	 * Removes the selected (last) image from the list
 	 */
 	public void removeSelectedMapImage() {
-		if (!images.isEmpty())
-			images.remove(images.size() - 1);
+		if (!images.isEmpty()) {
+			MapImage map = images.remove(images.size() - 1);
+			if (map != null) {
+				imagesInFixedOrder.remove(map);
+
+				String undoXML = new XMLControlElement(map).toXML();
+				SunBlockerEdit edit = new SunBlockerEdit(undoXML) {
+					@Override
+					public void redo() throws CannotUndoException {
+						super.redo();
+						XMLControl control = new XMLControlElement(undo);
+						// find image and remove with no new edit
+						String path = control.getString("path");
+						if (path != null) {
+							for (int i = 0; i < images.size(); i++) {
+								MapImage map = images.get(i);
+
+								if (path.equals(map.getImagePath())) {
+									images.remove(map);
+									imagesInFixedOrder.remove(map);
+									editor.refreshDisplay();
+									break;
+								}
+							}
+						}
+					}
+
+					void load(String undoXML) {
+						// used only for undo--just load a new MapImage and add it
+						XMLControl control = new XMLControlElement(undoXML);
+						MapImage map = (MapImage)control.loadObject(null);
+						addMapImage(map);
+//						blockPlot.repaint();
+						editor.refreshDisplay();
+					}
+					
+					@Override
+			    public String getPresentationName() {
+			      return "remove image";
+					}
+				};
+				editor.undoSupport.postEdit(edit);
+				editor.refreshDisplay();
+			}
+		}
 	} 
 	
 	/**
@@ -232,6 +286,7 @@ public class SunBlocker implements Drawable {
 	public void addMapImage(MapImage map) {
 		if (map != null && !images.contains(map)) {
 			images.add(map);
+			imagesInFixedOrder.add(map);
 		}
 	}
 	
@@ -312,18 +367,22 @@ public class SunBlocker implements Drawable {
 	class BlockEditorDialog extends JDialog {
 		
 		JMenuItem closeImageItem;
-		JButton zoomButton, zoomImageButton;
+		JButton zoomButton, zoomImageButton, opacityButton;
+		JMenuItem undoItem, redoItem;
 		JLabel zoomLabel, dragLabel, zoomImageLabel, dragImageLabel;
 		JLabel drawLabel;
 		JCheckBox drawCheckbox;
 		JToolBar toolbar;
 		JMenuItem pasteImageItem;
-		JMenu alphaMenu;
+		JMenu imageMenu, selectImageMenu;
 		MenuListener menuListener;
-
+		UndoableEditSupport undoSupport;
+		UndoManager undoManager;
+		JSlider alphaSlider;
+		
 		BlockEditorDialog() {
-			super(app.frame, false);
-			setTitle("Mountains");
+			super(tab.frame, false);
+			setTitle("Skyline Editor");
 			setResizable(false);
 			JPanel contentPane = new JPanel(new BorderLayout());
 			contentPane.setBorder(BorderFactory.createEtchedBorder());
@@ -339,17 +398,19 @@ public class SunBlocker implements Drawable {
 			drawCheckbox.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 6));
 			drawCheckbox.setAction(new AbstractAction() {
 				public void actionPerformed(ActionEvent e) {
-					app.plot.setTracksVisible(drawCheckbox.isSelected());
+					tab.plot.setTracksVisible(drawCheckbox.isSelected());
 				}				
 			});
 			
-			drawLabel = new JLabel("Draw: control-drag");
+			drawLabel = new JLabel("To draw: alt-control-drag");
+			drawLabel = new JLabel("");
 						
 			zoomButton = new OSPButton();
+			zoomButton.setHorizontalTextPosition(JButton.LEFT);
 			zoomButton.setAction(new AbstractAction() {
 				public void actionPerformed(ActionEvent e) {
 					JPopupMenu popup = new JPopupMenu();
-					int n = app.round((blockPlot.zoomFactor - 1) * 20);
+					int n = tab.round((blockPlot.zoomFactor - 1) * 20);
 					n = Math.min(Math.max(0, n), 100);
 					double center = (blockPlot.getPreferredXMax() + blockPlot.getPreferredXMin()) / 2;
 					JSlider zoomSlider = new JSlider(JSlider.HORIZONTAL, 0, 100, n);
@@ -357,18 +418,19 @@ public class SunBlocker implements Drawable {
 			      blockPlot.zoom(1 + zoomSlider.getValue()/20.0, center);
 			    });
 			    popup.add(zoomSlider);
-			    popup.show(zoomButton, -50, zoomButton.getHeight());
+			    popup.show(zoomButton, 0, zoomButton.getHeight());
 				}				
 			});
 			
 			zoomImageButton = new OSPButton();
+			zoomImageButton.setHorizontalTextPosition(JButton.LEFT);
 			zoomImageButton.setAction(new AbstractAction() {
 				public void actionPerformed(ActionEvent e) {
 					if (getSelectedMapImage() != null) {
 						double scale = getSelectedMapImage().getScale();
 						// determine current slider value
-						double power = Math.log(scale) / Math.log(SunApp.ZOOM_FACTOR);
-						int n = app.round(90 + power);
+						double power = Math.log(scale) / Math.log(SunTab.ZOOM_FACTOR);
+						int n = tab.round(90 + power);
 						n = Math.max(0, Math.min(n, 110));
 						
 						JPopupMenu popup = new JPopupMenu();
@@ -376,20 +438,41 @@ public class SunBlocker implements Drawable {
 						
 						zoomSlider.addChangeListener(ev -> {
 							int pow = zoomSlider.getValue() - 90;
-							double z = Math.pow(SunApp.ZOOM_FACTOR, pow);
+							double z = Math.pow(SunTab.ZOOM_FACTOR, pow);
 							getSelectedMapImage().setScaleWithFixedImageCenter(z);
 							repaint();
 				    });
 				    popup.add(zoomSlider);
-				    popup.show(zoomImageButton, -50, zoomImageButton.getHeight());
+				    popup.show(zoomImageButton, 0, zoomImageButton.getHeight());
 					}				
 				}				
 			});
 			
+			opacityButton = new OSPButton();
+			opacityButton.setAction(new AbstractAction() {
+				public void actionPerformed(ActionEvent e) {
+					MapImage map = tab.plot.map;
+					if (map != null) {
+						tab.plot.pvPanel.setInflation(0.2);
+						tab.plot.repaint();
+						
+						JPopupMenu popup = new JPopupMenu();
+						JSlider alphaSlider = new JSlider(JSlider.HORIZONTAL, 0, 255, imageAlpha);
+						alphaSlider.addChangeListener(ev -> {
+				      blockPlot.setImageAlpha(alphaSlider.getValue());
+				    });
+				    
+				    popup.add(alphaSlider);
+				    popup.show(opacityButton, 0, opacityButton.getHeight());
+					}				
+				}				
+			});
+
 			zoomLabel = new JLabel("Plot:");
-			dragLabel = new JLabel("drag to move");
+			dragLabel = new JLabel("| to move, drag mouse");
 			zoomImageLabel = new JLabel("Image:");
-			dragImageLabel = new JLabel("shift-drag to move");
+			dragImageLabel = new JLabel("Shift-drag to move");
+			dragImageLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
 
 			toolbar = new JToolBar();
 			toolbar.setFloatable(false);
@@ -408,10 +491,12 @@ public class SunBlocker implements Drawable {
 			toolbar.add(Box.createHorizontalStrut(8));
 			
 			pack();
-			setLocationRelativeTo(app.frame);
+			setLocationRelativeTo(tab.frame);
 			
 			JMenuBar menubar = new JMenuBar();
-			JMenu fileMenu = new JMenu("Images");
+			setJMenuBar(menubar);
+			
+			JMenu fileMenu = new JMenu("File");
 			menubar.add(fileMenu);
 			JMenuItem openImageItem = new JMenuItem("Open Image");
 			fileMenu.add(openImageItem);
@@ -419,45 +504,89 @@ public class SunBlocker implements Drawable {
 				openImage();
 				refreshDisplay();
 			});
+
+			JMenu editMenu = new JMenu("Edit");
+			menubar.add(editMenu);
+			
+			// add undo and redo items
+			undoItem = new JMenuItem("Undo");
+			editMenu.add(undoItem);
+			undoItem.addActionListener(new ActionListener() {
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					undoManager.undo();
+				}
+
+			});
+			redoItem = new JMenuItem("Redo");
+			editMenu.add(redoItem);
+			redoItem.addActionListener(new ActionListener() {
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					undoManager.redo();
+				}
+			});
+			
+			editMenu.addSeparator();
+
 			pasteImageItem = new JMenuItem("Paste Image");
-			fileMenu.add(pasteImageItem);
+			editMenu.add(pasteImageItem);
 			pasteImageItem.addActionListener(e -> {
 				pasteImage();
 				refreshDisplay();
 			});
-			closeImageItem = new JMenuItem("Close Image");
-			fileMenu.add(closeImageItem);
+			
+			imageMenu = new JMenu("Image");
+			menubar.add(imageMenu);
+			
+			selectImageMenu = new JMenu("Select");
+			imageMenu.add(selectImageMenu);
+			
+			closeImageItem = new JMenuItem("Remove Selected Image");
+			editMenu.add(closeImageItem);
 			closeImageItem.addActionListener(e -> {
 				if (!images.isEmpty()) {
 					removeSelectedMapImage();
 					refreshDisplay();
-					repaint();
-					
+					repaint();					
 				}
 			});
-			
-			fileMenu.addSeparator();
-			
-			alphaMenu = new JMenu("Opacity");
-			fileMenu.add(alphaMenu);
-			JSlider alphaSlider = new JSlider(JSlider.HORIZONTAL, 0, 255, imageAlpha);
-			alphaSlider.addChangeListener(e -> {
-	      blockPlot.setImageAlpha(alphaSlider.getValue());
-	    });
-	    alphaMenu.add(alphaSlider);
-	    fileMenu.add(alphaMenu);
-
-			setJMenuBar(menubar);
+			imageMenu.add(closeImageItem);
+						
 			menuListener = new MenuListener() {
 
 				@Override
 				public void menuSelected(MenuEvent e) {
-					Transferable t = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
-					boolean enable = false;
-					try {
-						enable = t != null && t.isDataFlavorSupported(DataFlavor.imageFlavor);
-						pasteImageItem.setEnabled(enable);
-					} catch (Exception ex) {
+					if (e.getSource() == editMenu) {
+						Transferable t = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
+						boolean enable = false;
+						try {
+							enable = t != null && t.isDataFlavorSupported(DataFlavor.imageFlavor);
+							pasteImageItem.setEnabled(enable);
+						} catch (Exception ex) {
+						}						
+					}
+					else if (e.getSource() == imageMenu) {
+						// rebuild select image item
+						selectImageMenu.removeAll();
+						int n = 1;
+						for (int i = 0; i < imagesInFixedOrder.size(); i++) {
+							MapImage map = imagesInFixedOrder.get(i);
+							String s = map.getImagePath();
+							if (s == null) {
+								s = "pasted image "+n++;
+							}
+							else {
+								s = XML.getName(s);
+							}
+							JMenuItem item = new JRadioButtonMenuItem(s);
+							item.setSelected(map == images.get(images.size() - 1));
+							item.addActionListener(ev -> {
+								setSelectedMapImage(map);
+								repaint();					
+							});
+							selectImageMenu.add(item);
+						}
 					}
 				}
 
@@ -468,8 +597,15 @@ public class SunBlocker implements Drawable {
 				public void menuCanceled(MenuEvent e) {}
 				
 			};
-			fileMenu.addMenuListener(menuListener);
+			editMenu.addMenuListener(menuListener);
+			imageMenu.addMenuListener(menuListener);
 			enableDragNDrop();
+			
+			// set up the undo system
+			undoManager = new UndoManager();
+			undoSupport = new UndoableEditSupport();
+			undoSupport.addUndoableEditListener(undoManager);
+
 			refreshDisplay();
 		}
 		
@@ -484,8 +620,8 @@ public class SunBlocker implements Drawable {
 			chooser.setDialogTitle("Open Image");
 			chooser.resetChoosableFileFilters();
 			chooser.setAcceptAllFileFilterUsed(false);
-			chooser.addChoosableFileFilter(SunApp.imageFileFilter);
-			chooser.setFileFilter(SunApp.imageFileFilter);
+			chooser.addChoosableFileFilter(SunTab.imageFileFilter);
+			chooser.setFileFilter(SunTab.imageFileFilter);
 			String chooserPath = (String)OSPRuntime.getPreference("file_chooser_directory");
 			if (chooserPath != null) {
 				chooser.setCurrentDirectory(new File(chooserPath));
@@ -524,11 +660,16 @@ public class SunBlocker implements Drawable {
 		 * Refreshes this dialog
 		 */
 		void refreshDisplay() {
-			zoomButton.setIcon(app.zoomIcon);
-			zoomButton.setToolTipText("Magnify the plot");
-			zoomImageButton.setIcon(app.zoomIcon);
+			zoomButton.setIcon(SunTab.zoomIcon);
+			zoomButton.setText("Zoom");
+			zoomButton.setToolTipText("Magnify the drawing area");
+			zoomImageButton.setIcon(SunTab.zoomIcon);
+			zoomImageButton.setText("Scale");
 			zoomImageButton.setToolTipText("Magnify the image");
 			zoomImageButton.setEnabled(!images.isEmpty());
+			opacityButton.setText("Opacity");
+			opacityButton.setToolTipText("Set the image opacity");
+			opacityButton.setEnabled(!images.isEmpty());
 			closeImageItem.setEnabled(!images.isEmpty());
 			zoomLabel.setEnabled(true);
 			dragLabel.setEnabled(true);
@@ -538,21 +679,31 @@ public class SunBlocker implements Drawable {
 			// rebuild toolbar
 			toolbar.removeAll();
 			toolbar.add(Box.createHorizontalStrut(8));
-			toolbar.add(zoomLabel);
+//			toolbar.add(zoomLabel);
 			toolbar.add(zoomButton);
-			toolbar.add(dragLabel);
+//			toolbar.add(dragLabel);
 			toolbar.add(Box.createHorizontalGlue());
 			toolbar.add(drawLabel);
 			toolbar.add(Box.createHorizontalGlue());
 			if (!images.isEmpty()) {
 				toolbar.add(zoomImageLabel);
 				toolbar.add(zoomImageButton);
+				toolbar.add(opacityButton);
 				toolbar.add(dragImageLabel);
 				toolbar.add(Box.createHorizontalStrut(8));
 			}
 			else 
 				toolbar.add(Box.createHorizontalStrut(130));
-			alphaMenu.setEnabled(!images.isEmpty());
+			
+			imageMenu.setEnabled(!images.isEmpty());
+			undoItem.setEnabled(undoManager.canUndo());
+			redoItem.setEnabled(undoManager.canRedo());
+			undoItem.setText(undoManager.canUndo()?
+					undoManager.getUndoPresentationName():
+					"Undo");
+			redoItem.setText(undoManager.canRedo()?
+					undoManager.getRedoPresentationName():
+					"Redo");
 			repaint();
 		}
 
@@ -570,7 +721,7 @@ public class SunBlocker implements Drawable {
 			}
 			else {
 				// show warning dialog
-				JOptionPane.showMessageDialog(app.frame, 
+				JOptionPane.showMessageDialog(tab.frame, 
 						"\""+file.getName()+"\" is not a readable image file.", //$NON-NLS-1$
 						"Error", //$NON-NLS-1$
 						JOptionPane.WARNING_MESSAGE);
@@ -615,6 +766,7 @@ public class SunBlocker implements Drawable {
 		SunPoint utilityPt;
 		SunPoint moverPt;
 		double zoomFactor = 1;
+		String undoXML;
 
 		BlockPlottingPanel() {
 			super("", "", "");
@@ -635,7 +787,7 @@ public class SunBlocker implements Drawable {
 					double dx = x - this.x;
 					double dy = y - this.y;
 					super.setXY(x, y);
-					if (mouseEvent.isShiftDown()) {
+					if (mouseEvent.isShiftDown() || mouseEvent.isControlDown()) {
 						// move map
 						MapImage map = getSelectedMapImage();
 						if (map != null) {
@@ -645,7 +797,7 @@ public class SunBlocker implements Drawable {
 							map.setOrigin(xy[0], xy[1]);
 						}
 					}
-					else if (!mouseEvent.isControlDown()){
+					else {
 						dx = (mouseEvent.getX() - mouseX0) / getXPixPerUnit();
 						// move plot limits if zoomed
 						double xmin = xmin0 - dx;
@@ -667,7 +819,7 @@ public class SunBlocker implements Drawable {
 				public Interactive findInteractive(DrawingPanel panel, int xpix, int ypix) {
 					if (mouseEvent.getButton() != MouseEvent.BUTTON1)
 						return null;
-					return mouseEvent.isControlDown()? null: this;
+					return mouseEvent.isAltDown()? null: this;
 				}
 			};
 
@@ -682,8 +834,9 @@ public class SunBlocker implements Drawable {
 				@Override
 				public Interactive findInteractive(DrawingPanel panel, int xpix, int ypix) {
 					if (mouseEvent.getButton() != MouseEvent.BUTTON1)
-					return null;
-					return mouseEvent.isControlDown()? this: null;
+						return null;
+					return mouseEvent.isControlDown()
+							&& mouseEvent.isAltDown()? this: null;
 				}
 
 				@Override
@@ -706,7 +859,7 @@ public class SunBlocker implements Drawable {
 					repaint();
 					xPrevProfile = x; 
 					loadPlotOutlineFromAltitudes();
-					app.refreshViews();
+					tab.refreshViews();
 				}
 			};
 			
@@ -720,26 +873,30 @@ public class SunBlocker implements Drawable {
 						moverPt.setScreenPosition(p.x, p.y);
 						xmin0 = getPreferredXMin();
 						plotWidth = Math.min(360, getPreferredXMax() - xmin0);
-						selectMapImageAt(moverPt);
+						if (e.isShiftDown() || e.isControlDown())
+							selectMapImageAt(moverPt);
+					}
+					if (getInteractive() == profilerPt) {
+						undoXML = new XMLControlElement(SunBlocker.this).toXML();
 					}
 				}	
 				
 				@Override
 				public void mouseReleased(MouseEvent e) {
 					xPrevProfile = -181;
-					if (e.isPopupTrigger()) {
-						JPopupMenu popup = getPopupMenu();
-						popup.show(BlockPlottingPanel.this, e.getX(), e.getY());
+					if (undoXML != null) {
+						SunBlockerEdit edit = new SunBlockerEdit(undoXML);
+						editor.undoSupport.postEdit(edit);
+						undoXML = null;
+						editor.refreshDisplay();
 					}
 				}
 
 				@Override
 				public void mouseClicked(MouseEvent e) {
 					if (e.getClickCount() == 2) {
-						setAutoscaleX(false);
-						setAutoscaleY(false);
-						setPreferredMinMax(-180, 180, 0, 90);
-						repaint();
+						double center = (blockPlot.getPreferredXMax() + blockPlot.getPreferredXMin()) / 2;
+				    blockPlot.zoom(1, center);
 					}
 				}
 
@@ -768,7 +925,7 @@ public class SunBlocker implements Drawable {
 						}
 					}
 					else {
-						double factor = Math.pow(SunApp.ZOOM_FACTOR, delta) ;
+						double factor = Math.pow(SunTab.ZOOM_FACTOR, delta) ;
 						Point p = e.getPoint();
 						utilityPt.setScreenPosition(p.x,  p.y);
 						zoom(zoomFactor * factor, utilityPt.getX());
@@ -784,10 +941,19 @@ public class SunBlocker implements Drawable {
 		
 		@Override
 		public void setMouseCursor(Cursor cursor) {
-			if (mouseEvent != null && mouseEvent.isControlDown()) {
+			if (mouseEvent == null)
+				return;
+//			System.out.println("pig2 alt? "+mouseEvent.isAltDown()
+//			+" ctrl? "+mouseEvent.isControlDown()+" shift? "+mouseEvent.isShiftDown());
+			if (mouseEvent.isAltDown()
+					&& mouseEvent.isControlDown()) {
 				setCursor(pencil_cursor);					
 			}
-			else if (getSelectedMapImage() != null && mouseEvent != null && mouseEvent.isShiftDown())
+			else if (mouseEvent.isAltDown()) {
+				setCursor(Cursor.getDefaultCursor());					
+			}
+			else if (getSelectedMapImage() != null 
+					&& (mouseEvent.isShiftDown() || mouseEvent.isControlDown()))
 				setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));	
 			else if (zoomFactor > 1.05)
 				setCursor(Cursor.getPredefinedCursor(Cursor.W_RESIZE_CURSOR));	
@@ -809,7 +975,7 @@ public class SunBlocker implements Drawable {
 		/**
 		 * Zooms the plot to a specified factor, keeping one spot fixed
 		 * 
-		 * @param alfa 0-255
+		 * @param factor the zoom factor
 		 * @param fixedX the x value that remains fixed in the plot
 		 */
 		void zoom(double factor, double fixedX) {
@@ -838,28 +1004,6 @@ public class SunBlocker implements Drawable {
 			repaint();
 		}
 		
-		@Override
-		public JPopupMenu getPopupMenu() {
-			buildPopupMenu();
-			return popupmenu;
-		}
-
-		@Override
-		protected void buildPopupMenu() {
-			if (popupmenu == null) {
-				popupmenu = new JPopupMenu();
-			} else {
-				popupmenu.removeAll();
-			}
-			autoscaleItem = new JMenuItem("Full Scale"); //$NON-NLS-1$
-			autoscaleItem.addActionListener((e) -> {
-				setPreferredMinMax(-180, 180, 0, 90);
-				zoomBox.setVisible(false);				
-				repaint();
-			});
-			popupmenu.add(autoscaleItem);
-		}
-		
 		/**
 		 * Refreshes the profile dataset
 		 */
@@ -885,20 +1029,38 @@ public class SunBlocker implements Drawable {
 			utilityPt.setLocation(getPreferredXMin(),  getPreferredYMax());
 			Point p0 = new Point(utilityPt.getScreenPosition());
 			utilityPt.setLocation(getPreferredXMax(),  0);
-			Point p1 = utilityPt.getScreenPosition();
+			Point p1 = new Point(utilityPt.getScreenPosition());
       
 			g.setColor(Color.WHITE);
       g.fillRect(p0.x, p0.y, p1.x-p0.x, p1.y-p0.y);
       
 			// draw map images, if any
       if (!images.isEmpty()) {
+				Graphics2D g2 = (Graphics2D)g;
 				Shape clip = g.getClip();
+				Color c = g.getColor();
+				Stroke stroke = g2.getStroke();
 	      g.setClip(p0.x, p0.y, p1.x-p0.x, p1.y-p0.y);
+	      MapImage map = null;
 				for (int i = 0; i < images.size(); i++) {
-					MapImage map = images.get(i);
+					map = images.get(i);
 		      map.draw(this, g);
 				}
+				if (map != null) {
+					// draw thin line around last (selected) map
+					utilityPt.setLocation(map.getXMin(),  map.getYMax());
+					Point p2 = new Point(utilityPt.getScreenPosition());
+					utilityPt.setLocation(map.getXMax(),  map.getYMin());
+					Point p3 = new Point(utilityPt.getScreenPosition());
+					Rectangle rect = new Rectangle();
+					rect.setFrameFromDiagonal(p2, p3);
+					g2.setStroke(tab.getStroke(1.5f));
+					g.setColor(Color.GREEN);
+					g2.draw(rect);
+				}
+				g.setColor(c);
 				g.setClip(clip);
+				g2.setStroke(stroke);
       }
 			
 			g.setColor(Color.BLACK);
@@ -909,9 +1071,8 @@ public class SunBlocker implements Drawable {
 		 * Refreshes the plot title
 		 */
 		void refreshPlotTitle() {
-			String s = images.isEmpty()? 
-					"Control-drag the mouse to draw mountains and trees. Open one or more images to trace for accuracy.":
-					"Control-drag the mouse to draw mountains and trees.";
+			String s = "Alt-control-drag to draw a skyline. "
+					+ "Add images to trace for better accuracy.";
 			axes.setTitle(s, "Arial-PLAIN-14");			
 		}
 
@@ -979,7 +1140,7 @@ public class SunBlocker implements Drawable {
 	  		
 	  	for (int i = 0; i < 91; i += interval) {
 	  		boolean heavy = interval == 30 || i%30 == 0;
-		  	g2.setStroke(heavy? app.getStroke(0.7f): dotted);
+		  	g2.setStroke(heavy? tab.getStroke(0.7f): dotted);
 	  		sunPt.setLocation(blockPlot.getPreferredXMin(), i);
 	  		p1 = new Point(sunPt.getScreenPosition());
 	  		sunPt.setLocation(blockPlot.getPreferredXMax(), i);
@@ -988,7 +1149,7 @@ public class SunBlocker implements Drawable {
 	  	}
 	  	for (int i = -180; i < 181; i += interval) {
 	  		boolean heavy = interval == 30 || i%30 == 0;
-		  	g2.setStroke(heavy? app.getStroke(0.7f): dotted);
+		  	g2.setStroke(heavy? tab.getStroke(0.7f): dotted);
 	  		sunPt.setLocation(i, 0);
 	  		p1 = new Point(sunPt.getScreenPosition());
 	  		sunPt.setLocation(i, blockPlot.getPreferredYMax());
@@ -1052,6 +1213,44 @@ public class SunBlocker implements Drawable {
       titleLine.draw(panel, g);
 	  }
 		
+	}
+
+	/**
+	 * A class to save and load data for this class.
+	 */
+	class SunBlockerEdit extends AbstractUndoableEdit {
+
+		String undo; // xml string
+		String redo; // xml string
+
+		protected SunBlockerEdit(String undoXML) {
+			undo = undoXML;
+			redo = new XMLControlElement(SunBlocker.this).toXML();
+		}
+
+		@Override
+		public void undo() throws CannotUndoException {
+			super.undo();
+			load(undo);
+		}
+
+		@Override
+		public void redo() throws CannotUndoException {
+			super.redo();
+			load(redo);
+		}
+
+		void load(String xml) {
+			XMLControl control = new XMLControlElement(xml);
+			control.loadObject(SunBlocker.this);
+			editor.refreshDisplay();
+		}
+		
+		@Override
+    public String getPresentationName() {
+      return "edit skyline";
+  }
+
 	}
 
 	/**

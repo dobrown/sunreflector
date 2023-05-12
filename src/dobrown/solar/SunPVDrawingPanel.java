@@ -38,7 +38,7 @@ import org.opensourcephysics.tools.FunctionEditor;
  */
 public class SunPVDrawingPanel extends DrawingPanel {
 	
-	SunApp app;
+	SunTab app;
 	
 	HorizontalPVView horizontal;
 	Point prevMousePt;
@@ -49,7 +49,7 @@ public class SunPVDrawingPanel extends DrawingPanel {
 	 * 
 	 * @param app the SunApp
 	 */
-	SunPVDrawingPanel(SunApp app) {
+	SunPVDrawingPanel(SunTab app) {
 		this.app = app;
 		removeOptionController();
 		setShowCoordinates(false);

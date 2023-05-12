@@ -39,7 +39,7 @@ public class SunReflector {
 	static final Quaternion Y_NORTH = new Quaternion(0, 0, 1, 0);
 	static final Quaternion Z_UP = new Quaternion(0, 0, 0, 1);
 			
-	SunApp app;
+	SunTab app;
 	
 	Quaternion normal = new Quaternion(0, 0, 0, 1);
 	Quaternion tiltAxis, dipAxis;
@@ -51,7 +51,7 @@ public class SunReflector {
 	 * 
 	 * @param app the SunApp
 	 */
-	SunReflector(SunApp app) {
+	SunReflector(SunTab app) {
 		this.app = app;
 	}
 		

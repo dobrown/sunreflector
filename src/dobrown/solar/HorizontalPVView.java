@@ -45,13 +45,13 @@ public class HorizontalPVView extends PVView {
 	/**
 	 * Constructor
 	 * 
-	 * @param app the SunApp
+	 * @param tab the SunTab
 	 * @param panel the panel this will be drawn on
 	 * @param x the x-position on the panel
 	 * @param y the y-position on the panel
 	 */
-	public HorizontalPVView(SunApp app, DrawingPanel panel, double x, double y) {
-		super(app, panel, x, y);
+	public HorizontalPVView(SunTab tab, DrawingPanel panel, double x, double y) {
+		super(tab, panel, x, y);
 		cameraAlt = 0; // horizontal
 		setCameraAz(Math.PI); // facing north
 	}
@@ -75,19 +75,19 @@ public class HorizontalPVView extends PVView {
 		Point2D above = new Point2D.Float(0, rect.y);
     Paint paint = new java.awt.LinearGradientPaint(above, 
     		below, 
-    		app.skyFractions, 
-    		app.skyColors);
+    		tab.skyFractions, 
+    		tab.skyColors);
     g2.setPaint(paint);
     g2.fill(rect);
     
     // fill below horizon with sunBlock fillColor
     rect.y = myScreenLoc.y;
     rect.height = h - myScreenLoc.y;
-    g2.setColor(app.sunBlock.fillColor);
+    g2.setColor(tab.sunBlock.fillColor);
     g2.fill(rect);	
     
     // draw sunBlock
-    if (app.sunBlock.isEnabled()) {
+    if (tab.sunBlock.isEnabled()) {
     	drawSunBlock();
     }
     
@@ -99,13 +99,13 @@ public class HorizontalPVView extends PVView {
 	
 	@Override
 	protected void drawRays() {
-		double[][] rayData = app.getRayData(app.when.getTimeIndex()); // sun and reflection
+		double[][] rayData = tab.getRayData(tab.when.getTimeIndex()); // sun and reflection
 		if (rayData == null)
 			return;
-		boolean glare = Math.abs(rayData[1][1]) < 2 * SunApp.ONE_DEGREE
-				&& Math.abs(cameraAz - rayData[1][0]) < 2 * SunApp.ONE_DEGREE;
+		boolean glare = Math.abs(rayData[1][1]) < 2 * SunTab.ONE_DEGREE
+				&& Math.abs(cameraAz - rayData[1][0]) < 2 * SunTab.ONE_DEGREE;
 		super.drawRays(glare);
-		boolean[] vis = app.getRayVisibility(app.when.getTimeIndex());
+		boolean[] vis = tab.getRayVisibility(tab.when.getTimeIndex());
 		if (glare && vis[1]) {
 			double[] azAlt = rayData[1];
 			azAlt[0] = azAlt[0] < Math.PI? azAlt[0] + Math.PI: azAlt[0] - Math.PI;
@@ -114,7 +114,7 @@ public class HorizontalPVView extends PVView {
 			delta = Math.sqrt(delta*delta + azAlt[1]*azAlt[1]);
 			Point p = getViewPoint(azAlt);
 			g2.setColor(new Color(255, 0, 0, 100));
-			int r = 200 - app.round(Math.abs(delta) * 100 / SunApp.ONE_DEGREE);
+			int r = 200 - tab.round(Math.abs(delta) * 100 / SunTab.ONE_DEGREE);
 			r = Math.max(5, r);
 			g2.fillOval(p.x - r, p.y - r, 2*r, 2*r);
 		}
@@ -132,22 +132,22 @@ public class HorizontalPVView extends PVView {
 	protected void drawSunBlock() {
 		double centerDegrees = Math.toDegrees(centerAz);
 		useNegativeAngles = centerDegrees < 90 || centerDegrees > 270;
-		int steps = app.round(drawingPanel.getXMax() - drawingPanel.getXMin());
+		int steps = tab.round(drawingPanel.getXMax() - drawingPanel.getXMin());
 		myPath.reset();					
 		myPath.moveTo(viewRect.x, myScreenLoc.y);
   	for (int j = 0; j <= steps; j++) {
-  		int degrees = app.round(centerDegrees + drawingPanel.getXMin() + j);
+  		int degrees = tab.round(centerDegrees + drawingPanel.getXMin() + j);
   		degrees = degrees > 359? degrees - 360: degrees < 0? degrees + 360: degrees;
   		double az = Math.toRadians(degrees);
-			double alt = app.sunBlock.getAltitude(az);
+			double alt = tab.sunBlock.getAltitude(az);
 			Point p = getViewPoint(new double[] {az, alt});
 			myPath.lineTo(p.x, p.y);					
 		}
 		myPath.lineTo(viewRect.x + viewRect.width, myScreenLoc.y);
 		myPath.closePath();
-		g2.setColor(app.sunBlock.fillColor);
+		g2.setColor(tab.sunBlock.fillColor);
 		g2.fill(myPath);
-		g2.setColor(app.sunBlock.edgeColor);
+		g2.setColor(tab.sunBlock.edgeColor);
 		g2.draw(myPath);					
 	}
 	
@@ -188,7 +188,7 @@ public class HorizontalPVView extends PVView {
 	 * Draw the labels in the view.
 	 */
 	protected void drawLabels() {
-		int degrees = app.round(Math.toDegrees(cameraAz)+180);
+		int degrees = tab.round(Math.toDegrees(cameraAz)+180);
 		if (degrees > 180)
 			degrees -= 360;
 		String label = degrees==0? "Facing North":
@@ -205,7 +205,7 @@ public class HorizontalPVView extends PVView {
     int h = metrics.getHeight() -  metrics.getAscent()/2;
 		char[] c = label.toCharArray();
 		g2.drawChars(c, 0, c.length, 
-				app.round(viewRect.getCenterX() - w/2), app.round(top + h + 8));			
+				tab.round(viewRect.getCenterX() - w/2), tab.round(top + h + 8));			
 	}
 	
 	@Override

@@ -79,7 +79,7 @@ public class SunPlottingPanel extends PlottingPanel {
 	static String defaultMapImage = "south_tahoe.gif";
 	
 	// instance fields
-	SunApp app;
+	SunTab app;
 	
 	Color reflectionTrackColor = new Color(80, 150, 20);
 	
@@ -110,7 +110,7 @@ public class SunPlottingPanel extends PlottingPanel {
 	 * 
 	 * @param app the SunApp
 	 */
-	SunPlottingPanel(SunApp app) {
+	SunPlottingPanel(SunTab app) {
 		super("", "", "");
 		this.app = app;
 		refreshPlotData();
@@ -128,20 +128,20 @@ public class SunPlottingPanel extends PlottingPanel {
 //		String jarDir = OSPRuntime.getLaunchJarDirectory();
 //		BufferedImage image = ResourceLoader.getBufferedImage(
 //				jarDir + "/" + defaultMapImage); 
-		BufferedImage image = ResourceLoader.getBufferedImage(
-				SunApp.RESOURCE_PATH + defaultMapImage); 
-		if (image != null) {
-			MapImage map = new MapImage(image);
-			setMap(map);
-			getMap().setOrigin(defaultMapOrigin[0], defaultMapOrigin[1]);
-			getMap().setScaleWithFixedOrigin(defaultMapScale);			
-		}
+//		BufferedImage image = ResourceLoader.getBufferedImage(
+//				SunTab.RESOURCE_PATH + defaultMapImage); 
+//		if (image != null) {
+//			MapImage map = new MapImage(image);
+//			setMap(map);
+//			getMap().setOrigin(defaultMapOrigin[0], defaultMapOrigin[1]);
+//			getMap().setScaleWithFixedOrigin(defaultMapScale);			
+//		}
 		// set up camera
 		camera.addPoint(0, 5);
 		camera.addPoint(-4, -5);
 		camera.addPoint(4, -5);
 		
-		setToolTipText("<html>Overhead view of the solar panel, light rays, horizon and mountains."
+		setToolTipText("<html>Overhead view of the solar panel, light rays, horizon and skyline."
 				+ "<br>The solar panel is at the center and the horizon surrounds it.</html>");
 				
 		// set up axes
@@ -508,7 +508,7 @@ public class SunPlottingPanel extends PlottingPanel {
 
 		/**
 		 * Draws a ray track across the sky, showing only sections that are
-		 * not blocked by mountains.
+		 * not blocked by the skyline.
 		 * 
 		 * @param drawingPanel the SunPlottingPanel
 		 * @param g2 the Graphics2D
