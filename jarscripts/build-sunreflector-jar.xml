@@ -2,7 +2,7 @@
 <!DOCTYPE project>
 <project name="build-sunreflector-jar" default="sunreflector_jar" basedir=".\">
 	<property name="workspace" value="../../" />
-	<property name="sundir" value="${workspace}/solar" />
+	<property name="sundir" value="${workspace}/sunreflector" />
 	<property name="src_osp" value="${workspace}/osp/src" />
 	<property name="src_sun" value="${sundir}/src" />
 	<property name="temp" value="temp-build" />
@@ -39,7 +39,7 @@
             	**/*.mp4,
             	*.xml, 
             	*.txt" />
-            <fileset dir="${workspace}/solar/bin"
+            <fileset dir="${workspace}/sunreflector/bin"
             	excludes="
             	test/, 
             	**/*.zip, 
@@ -54,7 +54,7 @@
 		<manifest file="${temp}/meta-inf/SUN.mf">
 			<attribute name="Built-By" value="${author}"/>
 			<attribute name="Build-Date" value="${buildtime.isoformat}"/>
-			<attribute name="Main-Class" value="dobrown.solar.SunApp"/>
+			<attribute name="Main-Class" value="dobrown.solar.SunFrame"/>
 			<attribute name="Class-Path" value=". lib/poi-3.17.jar lib/poi-ooxml-3.17.jar lib/poi-ooxml-schemas-3.17.jar lib/commons-collections4-4.1.jar lib/xmlbeans-2.6.0.jar"/>
 			<attribute name="permissions" value="all-permissions"/>
 		</manifest >
