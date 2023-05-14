@@ -52,7 +52,7 @@ public class MapImage extends MeasuredImage {
 		BufferedImage mapImage = ResourceLoader.getBufferedImage(path);
 		if (mapImage != null) {
 			setImage(mapImage); // also sets imagePath to null
-			imagePath = path; // set actual path 
+			imagePath = path; // set path last
 		}
 	}
 	
@@ -61,9 +61,10 @@ public class MapImage extends MeasuredImage {
 	 * 
 	 * @param mapImage a BufferedImage
 	 */
-	public MapImage(BufferedImage mapImage) {
+	public MapImage(BufferedImage mapImage, String path) {
 		if (mapImage != null) {
 			setImage(mapImage);
+			imagePath = path; // set path 			
 		}
 	}
 	

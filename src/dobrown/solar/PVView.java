@@ -85,7 +85,7 @@ public class PVView extends SunPoint {
 	/**
 	 * Constructor
 	 * 
-	 * @param tab the SunApp
+	 * @param tab the SunTab
 	 * @param panel the panel this will be drawn on
 	 * @param x the x-position on the panel
 	 * @param y the y-position on the panel

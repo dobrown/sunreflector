@@ -14,7 +14,13 @@ import javax.swing.JPopupMenu;
 import javax.swing.JSlider;
 import javax.swing.JSplitPane;
 import javax.swing.JToolBar;
+import javax.swing.undo.AbstractUndoableEdit;
+import javax.swing.undo.CannotUndoException;
+import javax.swing.undo.UndoManager;
+import javax.swing.undo.UndoableEditSupport;
 
+import org.opensourcephysics.controls.XMLControl;
+import org.opensourcephysics.controls.XMLControlElement;
 import org.opensourcephysics.display.OSPButton;
 
 public class SunTabPanel extends JPanel {
@@ -25,6 +31,8 @@ public class SunTabPanel extends JPanel {
 	JButton zoomButton, opacityButton, openMapButton, closeMapButton;
 	JSlider mapAlphaSlider;
 	JLabel mapLabel, mapDragLabel;
+	UndoableEditSupport undoSupport;
+	UndoManager undoManager;
 	
 	SunTabPanel(SunTab tab) {
 		super(new BorderLayout());
@@ -104,7 +112,7 @@ public class SunTabPanel extends JPanel {
 			}				
 		});
 
-		mapAlphaSlider = new JSlider(JSlider.HORIZONTAL, 100, 255, tab.plot.mapAlpha);
+		mapAlphaSlider = new JSlider(JSlider.HORIZONTAL, 0, 255, tab.plot.mapAlpha);
 		mapAlphaSlider.addChangeListener(e -> {
       tab.plot.setMapAlpha(mapAlphaSlider.getValue());
     });		
@@ -135,9 +143,12 @@ public class SunTabPanel extends JPanel {
 		closeMapButton = new OSPButton();
 		closeMapButton.setAction(new AbstractAction() {
 			public void actionPerformed(ActionEvent e) {
-				tab.plot.setMap(null);
+				if (tab.plot.map == null)
+					return;
+				tab.plot.setMap(null, true);
+				tab.changed = true;
 				tab.plot.repaint();
-				tab.frame.refreshDisplay();
+				tab.frame.refreshDisplay();				
 			}				
 		});
 				
@@ -145,6 +156,11 @@ public class SunTabPanel extends JPanel {
 		mapDragLabel = new JLabel("| drag to move");
 		
 		buildToolbar();
+		
+		// set up the undo system
+		undoManager = new UndoManager();
+		undoSupport = new UndoableEditSupport();
+		undoSupport.addUndoableEditListener(undoManager);
 
 		leftRightSplit.setDividerLocation(0.42);
 		topBottomSplit.setDividerLocation(0.65);
@@ -164,8 +180,11 @@ public class SunTabPanel extends JPanel {
 		toolbar.add(showSkylineCheckbox);
 		toolbar.add(Box.createHorizontalGlue());
 		
+		boolean hasMap = tab.plot.map != null;
+		if (!hasMap)
+			toolbar.add(Box.createHorizontalStrut(80));
 		toolbar.add(mapLabel);
-		if (tab.plot.map != null) {
+		if (hasMap) {
 			toolbar.add(zoomButton);
 			toolbar.add(opacityButton);
 //			toolbar.add(mapDragLabel);
@@ -203,5 +222,78 @@ public class SunTabPanel extends JPanel {
 		buildToolbar();
 	}
 		
+	/**
+	 * An undoable edit class.
+	 */
+	class ReplaceMapEdit extends AbstractUndoableEdit {
+
+		String undo; // xml string
+		String redo; // xml string
+
+		protected ReplaceMapEdit(String undoXML, String redoXML) {
+			undo = undoXML;
+			redo = redoXML;
+		}
+
+		@Override
+		public void undo() throws CannotUndoException {
+			super.undo();
+			int i = tab.frame.getTabIndex(tab);
+			if (i == -1)
+				return;
+			
+			// if the tab.plot has a redoable map, update its xml
+			if (redo != null)
+				redo = new XMLControlElement(tab.plot.map).toXML();				
+
+			// reload the MapImage
+			SunPlottingPanel plot = tab.plot;
+			XMLControl control = new XMLControlElement(undo);
+			MapImage map = (MapImage) control.loadObject(null);
+			if (map != null && map.getImagePath() != null) {
+				plot.setMap(map, false);
+				tab.changed = true;
+				plot.repaint();
+			}
+		}
+
+		@Override
+		public void redo() throws CannotUndoException {
+			super.redo();
+			int i = tab.frame.getTabIndex(tab);
+			if (i == -1)
+				return;
+			
+			// update undo map
+			undo = new XMLControlElement(tab.plot.map).toXML();			
+			
+			if (redo == null) {
+				tab.plot.setMap(null, false);
+				tab.changed = true;
+				tab.plot.repaint();
+				tab.frame.refreshDisplay();
+			}
+			else {
+				// reload the redo MapImage
+				SunPlottingPanel plot = tab.plot;
+				XMLControl control = new XMLControlElement(redo);
+				MapImage map = (MapImage) control.loadObject(null);
+				if (map != null && map.getImagePath() != null) {
+					plot.setMap(map, false);
+					tab.changed = true;
+					plot.repaint();
+				}
+				else 
+					plot.setMap(null, false);
+			}
+		}
+
+		@Override
+    public String getPresentationName() {
+      return redo==null? "remove map": "replace map";
+		}
+
+	}
+
 
 }

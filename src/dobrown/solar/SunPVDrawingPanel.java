@@ -32,13 +32,13 @@ import org.opensourcephysics.numerics.Quaternion;
 import org.opensourcephysics.tools.FunctionEditor;
 
 /**
- * A DrawingPanel to display and control a HorizontalPVView for a SunApp.
+ * A DrawingPanel to display and control a HorizontalPVView for a SunTab.
  *
  * @author Douglas Brown
  */
 public class SunPVDrawingPanel extends DrawingPanel {
 	
-	SunTab app;
+	SunTab tab;
 	
 	HorizontalPVView horizontal;
 	Point prevMousePt;
@@ -47,10 +47,10 @@ public class SunPVDrawingPanel extends DrawingPanel {
 	/**
 	 * Constructor
 	 * 
-	 * @param app the SunApp
+	 * @param tab the SunTab
 	 */
-	SunPVDrawingPanel(SunTab app) {
-		this.app = app;
+	SunPVDrawingPanel(SunTab tab) {
+		this.tab = tab;
 		removeOptionController();
 		setShowCoordinates(false);
 		setBorder(BorderFactory.createEtchedBorder());
@@ -58,7 +58,7 @@ public class SunPVDrawingPanel extends DrawingPanel {
 		setPreferredMinMax(-20, 20, -4, 16); // defines view pane in degrees
 		setToolTipText("<html>Horizontal view of the solar panel,"
 				+ " light rays and mountains.</html>");
-		horizontal = new HorizontalPVView(app, this, 0, 0);
+		horizontal = new HorizontalPVView(tab, this, 0, 0);
 		horizontal.setInflation(4);
 		addDrawable(horizontal);
 		
@@ -94,7 +94,7 @@ public class SunPVDrawingPanel extends DrawingPanel {
 					double delta = p.x - prevMousePt.x;
 					double az = prevAz - Math.toRadians(delta/4);
 					horizontal.setCameraAz(az);	
-					app.refreshViews();
+					tab.refreshViews();
 				}
 			}
 		});
@@ -105,16 +105,16 @@ public class SunPVDrawingPanel extends DrawingPanel {
 	 */
 	void refresh() {
 		horizontal.pvViewCoords = null;
-		Quaternion normal = app.reflector.normal;
+		Quaternion normal = tab.reflector.normal;
 		double[] azAlt = SunReflector.getAzimAltitude(normal);
-		String s = app.getAzaltString(azAlt[0], azAlt[1]);
+		String s = tab.getAzaltString(azAlt[0], azAlt[1]);
 		setMessage("Normal: "+s, 0);
 
-		double[][] rayData = app.getRayData(app.when.getTimeIndex());
+		double[][] rayData = tab.getRayData(tab.when.getTimeIndex());
 		if (rayData != null) {
 			Quaternion sunbeam = SunReflector.getQuaternion(rayData[0]); // going out		
 			double ang = normal.angle(sunbeam);
-			int degrees = app.round(Math.toDegrees(ang));
+			int degrees = tab.round(Math.toDegrees(ang));
 			setMessage("Incident angle " + degrees + FunctionEditor.DEGREES, 1);
 		}
 

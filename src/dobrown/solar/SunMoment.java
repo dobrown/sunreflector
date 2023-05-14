@@ -248,7 +248,7 @@ public class SunMoment {
 
 		/**
 		 * Creates a new object. Not used for SunMoment, the moment
-		 * is created by SunApp when reading text data
+		 * is created by SunTab when reading text data
 		 *
 		 * @param control the XMLControl with the object data
 		 * @return the newly created object, here null

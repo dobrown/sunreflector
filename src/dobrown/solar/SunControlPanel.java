@@ -22,21 +22,15 @@
 package dobrown.solar;
 
 import java.awt.BorderLayout;
-import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.GridLayout;
-import java.awt.Point;
-import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
-import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
-import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
 import javax.swing.JTextArea;
@@ -46,8 +40,6 @@ import javax.swing.border.TitledBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-import org.opensourcephysics.controls.XMLControlElement;
-import org.opensourcephysics.display.OSPButton;
 import org.opensourcephysics.tools.FunctionEditor;
 
 /**
@@ -69,7 +61,7 @@ public class SunControlPanel extends JPanel {
 	
 	/**
 	 * Constructor
-	 * @param tab the SunApp
+	 * @param tab the SunTab
 	 */
 	SunControlPanel(SunTab tab) {
 		super(new BorderLayout());
@@ -126,6 +118,7 @@ public class SunControlPanel extends JPanel {
 				int i = dateSlider.getValue();
 				tab.when.setDayNumber(i);
 				refreshDisplay();
+				tab.changed = true;
 				tab.refreshViews();
 			}
 
@@ -144,6 +137,7 @@ public class SunControlPanel extends JPanel {
 				int i = timeSlider.getValue();
 				tab.when.setTimeIndex(i);
 				refreshDisplay();
+				tab.changed = true;
 				tab.refreshViews();
 			}
 		});
@@ -160,6 +154,7 @@ public class SunControlPanel extends JPanel {
 				tab.reflector.setTiltAxis(Math.toRadians(i));
 				refreshDisplay();
 				tab.updateReflections();
+				tab.changed = true;
 				tab.refreshViews();
 			}
 
@@ -189,6 +184,7 @@ public class SunControlPanel extends JPanel {
 				tab.reflector.setTilt(Math.toRadians(i));
 				refreshDisplay();
 				tab.updateReflections();
+				tab.changed = true;
 				tab.refreshViews();
 			}
 		});
@@ -217,6 +213,7 @@ public class SunControlPanel extends JPanel {
 				tab.reflector.setDip(Math.toRadians(i));
 				refreshDisplay();
 				tab.updateReflections();
+				tab.changed = true;
 				tab.refreshViews();
 			}
 		});
@@ -405,11 +402,12 @@ public class SunControlPanel extends JPanel {
 				+ " for the entire day."
 				+ "\n\n"
 				+ "A map image may be added to the overhead view to help"
-				+ " evaluate possible glare. Drag to move the map"
-				+ " or use the toolbar buttons to control its scale and opacity."
-				+ " To replace the map, drag and drop an image file,"
+				+ " evaluate possible glare."
+				+ " To add a map, drag and drop an image file,"
 				+ " paste an image from the clipboard,"
 				+ " or click the open map button."
+				+ " Drag the mouse to move the map"
+				+ " and use the toolbar buttons to control its scale and opacity."
 				+ "\n\n"
 				+ "The horizontal view at the lower right shows the solar panel"
 				+ " from a viewpoint on the horizon (green arrow in the overhead view)."
@@ -435,7 +433,13 @@ public class SunControlPanel extends JPanel {
 				+ " By default, the location is"
 				+ " South Lake Tahoe CA and the date/time ranges"
 				+ " are May 1-Sep 30 and 6:00 am-8:00 pm."
-				+ " Click the open data button to load data for other locations or times.";
+				+ " Click the open data button to load data for other locations or times."
+				+ "\n\n"
+				+ "Choose File|Save Tab As to save a tab as a self-contained ZIP file."
+				+ " The ZIP includes your map, if any,"
+				+ " the sun and panel data, the skyline, and all images"
+				+ " currently in the Skyline Editor."
+				+ " To open a saved tab, choose File|Open Tab.";
 	}
 	
 	/**

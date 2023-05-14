@@ -101,9 +101,6 @@ public class NOAAReaderControl extends JDialog {
 		double[] loc = reader.readLocation();
 		ready = loc != null;
 		if (ready) {
-//			latField.setText("" + loc[0]);
-//			longField.setText("" + loc[1]);
-//			zoneSpinner.setValue(reader.app.round(loc[2]));			
 			latField.setText("" + reader.tab.latitude);
 			longField.setText("" + reader.tab.longitude);
 			zoneSpinner.setValue(reader.tab.timeZone);			

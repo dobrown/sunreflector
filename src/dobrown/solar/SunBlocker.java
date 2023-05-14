@@ -46,8 +46,6 @@ import java.awt.dnd.DropTargetEvent;
 import java.awt.dnd.DropTargetListener;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
@@ -60,7 +58,6 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
-import javax.swing.JCheckBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
@@ -126,7 +123,7 @@ public class SunBlocker implements Drawable {
 	/**
 	 * Constructor
 	 * 
-	 * @param tab the SunApp
+	 * @param tab the SunTab
 	 */
 	SunBlocker(SunTab tab) {
 		this.tab = tab;
@@ -164,9 +161,9 @@ public class SunBlocker implements Drawable {
 	public void setAltitude(double az, double alt) {
 		az = Math.max(az, Math.toRadians(-180));
 		az = Math.min(az, Math.toRadians(179.1));
-		if (az < -tab.ONE_DEGREE/2)
+		if (az < -SunTab.ONE_DEGREE/2)
 			az += 2*Math.PI;
-		if (az > 2*Math.PI-tab.ONE_DEGREE/2)
+		if (az > 2*Math.PI - SunTab.ONE_DEGREE/2)
 			az -= 2*Math.PI;
 		alt = Math.max(alt, 0);
 		alt = Math.min(alt, Math.PI / 2);
@@ -236,7 +233,6 @@ public class SunBlocker implements Drawable {
 			MapImage map = images.remove(images.size() - 1);
 			if (map != null) {
 				imagesInFixedOrder.remove(map);
-
 				String undoXML = new XMLControlElement(map).toXML();
 				SunBlockerEdit edit = new SunBlockerEdit(undoXML) {
 					@Override
@@ -264,7 +260,6 @@ public class SunBlocker implements Drawable {
 						XMLControl control = new XMLControlElement(undoXML);
 						MapImage map = (MapImage)control.loadObject(null);
 						addMapImage(map);
-//						blockPlot.repaint();
 						editor.refreshDisplay();
 					}
 					
@@ -371,7 +366,6 @@ public class SunBlocker implements Drawable {
 		JMenuItem undoItem, redoItem;
 		JLabel zoomLabel, dragLabel, zoomImageLabel, dragImageLabel;
 		JLabel drawLabel;
-		JCheckBox drawCheckbox;
 		JToolBar toolbar;
 		JMenuItem pasteImageItem;
 		JMenu imageMenu, selectImageMenu;
@@ -379,6 +373,7 @@ public class SunBlocker implements Drawable {
 		UndoableEditSupport undoSupport;
 		UndoManager undoManager;
 		JSlider alphaSlider;
+		boolean wasVisible;
 		
 		BlockEditorDialog() {
 			super(tab.frame, false);
@@ -392,15 +387,6 @@ public class SunBlocker implements Drawable {
 			setPreferredSize(new Dimension(820, 360));	
 			contentPane.add(blockPlot, BorderLayout.CENTER);
 			blockPlot.setImageAlpha(imageAlpha);
-			
-			drawCheckbox = new JCheckBox("Draw");
-			drawCheckbox.setOpaque(false);
-			drawCheckbox.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 6));
-			drawCheckbox.setAction(new AbstractAction() {
-				public void actionPerformed(ActionEvent e) {
-					tab.plot.setTracksVisible(drawCheckbox.isSelected());
-				}				
-			});
 			
 			drawLabel = new JLabel("To draw: alt-control-drag");
 			drawLabel = new JLabel("");
@@ -478,18 +464,6 @@ public class SunBlocker implements Drawable {
 			toolbar.setFloatable(false);
 			contentPane.add(toolbar, BorderLayout.NORTH);
 
-			toolbar.add(Box.createHorizontalStrut(8));
-			toolbar.add(zoomLabel);
-			toolbar.add(zoomButton);
-			toolbar.add(dragLabel);
-			toolbar.add(Box.createHorizontalGlue());
-			toolbar.add(drawLabel);
-			toolbar.add(Box.createHorizontalGlue());
-			toolbar.add(zoomImageLabel);
-			toolbar.add(zoomImageButton);
-			toolbar.add(dragImageLabel);
-			toolbar.add(Box.createHorizontalStrut(8));
-			
 			pack();
 			setLocationRelativeTo(tab.frame);
 			
@@ -534,6 +508,7 @@ public class SunBlocker implements Drawable {
 			pasteImageItem.addActionListener(e -> {
 				pasteImage();
 				refreshDisplay();
+				tab.changed = true;
 			});
 			
 			imageMenu = new JMenu("Image");
@@ -548,7 +523,8 @@ public class SunBlocker implements Drawable {
 				if (!images.isEmpty()) {
 					removeSelectedMapImage();
 					refreshDisplay();
-					repaint();					
+					repaint();
+					tab.changed = true;
 				}
 			});
 			imageMenu.add(closeImageItem);
@@ -718,6 +694,7 @@ public class SunBlocker implements Drawable {
 			if (map.getImagePath() != null) {
 				addMapImage(map);
 				repaint();
+				tab.changed = true;
 			}
 			else {
 				// show warning dialog
@@ -751,6 +728,7 @@ public class SunBlocker implements Drawable {
 	      }
 	    });
 	  }
+		
 	}
 	
 	/**
@@ -795,6 +773,7 @@ public class SunBlocker implements Drawable {
 							xy[0] -= dx / map.getScale();
 							xy[1] += dy / map.getScale();
 							map.setOrigin(xy[0], xy[1]);
+							tab.changed = true;
 						}
 					}
 					else {
@@ -857,6 +836,7 @@ public class SunBlocker implements Drawable {
 					}
 					refreshEditorProfileDataset();
 					repaint();
+					tab.changed = true;
 					xPrevProfile = x; 
 					loadPlotOutlineFromAltitudes();
 					tab.refreshViews();
@@ -921,6 +901,7 @@ public class SunBlocker implements Drawable {
 						if (map != null) {
 							map.setScaleWithFixedImageCenter(map.getScale() * factor);
 							repaint();
+							tab.changed = true;
 							setMouseCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));	
 						}
 					}
@@ -943,8 +924,6 @@ public class SunBlocker implements Drawable {
 		public void setMouseCursor(Cursor cursor) {
 			if (mouseEvent == null)
 				return;
-//			System.out.println("pig2 alt? "+mouseEvent.isAltDown()
-//			+" ctrl? "+mouseEvent.isControlDown()+" shift? "+mouseEvent.isShiftDown());
 			if (mouseEvent.isAltDown()
 					&& mouseEvent.isControlDown()) {
 				setCursor(pencil_cursor);					
@@ -970,6 +949,7 @@ public class SunBlocker implements Drawable {
 			imageAlpha = alfa % 256;
 			axes.setInteriorBackground(new Color(255,255,255,255-imageAlpha));
 			repaint();
+			tab.changed = true;
 		}
 		
 		/**
@@ -1216,7 +1196,7 @@ public class SunBlocker implements Drawable {
 	}
 
 	/**
-	 * A class to save and load data for this class.
+	 * An undoable edit class.
 	 */
 	class SunBlockerEdit extends AbstractUndoableEdit {
 
@@ -1249,7 +1229,7 @@ public class SunBlocker implements Drawable {
 		@Override
     public String getPresentationName() {
       return "edit skyline";
-  }
+		}
 
 	}
 

@@ -98,6 +98,7 @@ public class SunTab {
 	
 	int visibleRotationAxis = AXIS_NONE;
 	boolean isLoading;
+	boolean changed;
 	
 	static {
 		// set up ray colors in order of altitude in degrees
@@ -418,13 +419,13 @@ public class SunTab {
 		 */
 		@Override
 		public void saveObject(XMLControl control, Object obj) {
-			SunTab app = (SunTab)obj;			
-			control.setValue("reflector", app.reflector); //$NON-NLS-1$
-			control.setValue("day_time", app.when); //$NON-NLS-1$
-			control.setValue("plot", app.plot); //$NON-NLS-1$
-			control.setValue("camera_az", app.getCameraAz());
-			control.setValue("sun_block", app.sunBlock); //$NON-NLS-1$
-			control.setValue("sun_data", app.textData); //$NON-NLS-1$
+			SunTab tab = (SunTab)obj;			
+			control.setValue("reflector", tab.reflector); //$NON-NLS-1$
+			control.setValue("day_time", tab.when); //$NON-NLS-1$
+			control.setValue("plot", tab.plot); //$NON-NLS-1$
+			control.setValue("camera_az", tab.getCameraAz());
+			control.setValue("sun_block", tab.sunBlock); //$NON-NLS-1$
+			control.setValue("sun_data", tab.textData); //$NON-NLS-1$
 		}
 
 		/**

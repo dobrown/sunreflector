@@ -31,7 +31,7 @@ import org.opensourcephysics.numerics.Quaternion;
 
 /**
  * This is a reflecting surface that can be turned, tilted and dipped.
- * It determines reflections for SunApp.
+ * It determines reflections for SunTab.
  */
 public class SunReflector {
 	
@@ -39,7 +39,7 @@ public class SunReflector {
 	static final Quaternion Y_NORTH = new Quaternion(0, 0, 1, 0);
 	static final Quaternion Z_UP = new Quaternion(0, 0, 0, 1);
 			
-	SunTab app;
+	SunTab tab;
 	
 	Quaternion normal = new Quaternion(0, 0, 0, 1);
 	Quaternion tiltAxis, dipAxis;
@@ -49,10 +49,10 @@ public class SunReflector {
 	/**
 	 * Constructor
 	 * 
-	 * @param app the SunApp
+	 * @param tab the SunTab
 	 */
-	SunReflector(SunTab app) {
-		this.app = app;
+	SunReflector(SunTab tab) {
+		this.tab = tab;
 	}
 		
 	/**
@@ -191,8 +191,8 @@ public class SunReflector {
 		
 		int n = sunDatasets.size(); // number of days of data
 		for (int i = 0; i < n; i++) {
-			double[] insolation = new double[app.when.hours.length];
-			double[] vis = new double[app.when.hours.length];
+			double[] insolation = new double[tab.when.hours.length];
+			double[] vis = new double[tab.when.hours.length];
 			Dataset azalt = sunDatasets.get(i);
 			double[] az = azalt.getXPoints();
 			double[] alt = azalt.getYPoints();
@@ -241,10 +241,10 @@ public class SunReflector {
 		 */
 		@Override
 		public void saveObject(XMLControl control, Object obj) {
-			SunReflector app = (SunReflector)obj;
-			control.setValue("tilt_axis", app.tiltAxisAzimuth); //$NON-NLS-1$
-			control.setValue("tilt", app.tilt); //$NON-NLS-1$
-			control.setValue("dip", app.dip); //$NON-NLS-1$
+			SunReflector reflector = (SunReflector)obj;
+			control.setValue("tilt_axis", reflector.tiltAxisAzimuth); //$NON-NLS-1$
+			control.setValue("tilt", reflector.tilt); //$NON-NLS-1$
+			control.setValue("dip", reflector.dip); //$NON-NLS-1$
 		}
 
 		/**
@@ -267,10 +267,10 @@ public class SunReflector {
 		 */
 		@Override
 		public Object loadObject(XMLControl control, Object obj) {
-			SunReflector app = (SunReflector)obj;
-			app.setTiltAxis(control.getDouble("tilt_axis")); //$NON-NLS-1$
-			app.tilt = control.getDouble("tilt"); //$NON-NLS-1$
-			app.dip = control.getDouble("dip"); //$NON-NLS-1$
+			SunReflector reflector = (SunReflector)obj;
+			reflector.setTiltAxis(control.getDouble("tilt_axis")); //$NON-NLS-1$
+			reflector.tilt = control.getDouble("tilt"); //$NON-NLS-1$
+			reflector.dip = control.getDouble("dip"); //$NON-NLS-1$
 			return obj;
 		}
 	}

@@ -39,13 +39,12 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.Area;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Point2D;
-import java.awt.image.BufferedImage;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import javax.swing.BorderFactory;
-
 import org.opensourcephysics.controls.XML;
 import org.opensourcephysics.controls.XMLControl;
+import org.opensourcephysics.controls.XMLControlElement;
 import org.opensourcephysics.display.Dataset;
 import org.opensourcephysics.display.DatasetManager;
 import org.opensourcephysics.display.Drawable;
@@ -54,7 +53,7 @@ import org.opensourcephysics.display.Interactive;
 import org.opensourcephysics.display.PlottingPanel;
 import org.opensourcephysics.display.axes.PolarAxes;
 import org.opensourcephysics.tools.FunctionEditor;
-import org.opensourcephysics.tools.ResourceLoader;
+import dobrown.solar.SunTabPanel.ReplaceMapEdit;
 
 /**
  * A plotting panel for sun and reflection rays, tracks, sun block
@@ -79,7 +78,7 @@ public class SunPlottingPanel extends PlottingPanel {
 	static String defaultMapImage = "south_tahoe.gif";
 	
 	// instance fields
-	SunTab app;
+	SunTab tab;
 	
 	Color reflectionTrackColor = new Color(80, 150, 20);
 	
@@ -108,11 +107,11 @@ public class SunPlottingPanel extends PlottingPanel {
 	/**
 	 * Constructor
 	 * 
-	 * @param app the SunApp
+	 * @param tab the SunTab
 	 */
-	SunPlottingPanel(SunTab app) {
+	SunPlottingPanel(SunTab tab) {
 		super("", "", "");
-		this.app = app;
+		this.tab = tab;
 		refreshPlotData();
 		createGUI();
 	}
@@ -158,7 +157,7 @@ public class SunPlottingPanel extends PlottingPanel {
 		setPreferredMinMaxX(-defaultPlotMinMax, defaultPlotMinMax);
 		setPreferredMinMaxY(-defaultPlotMinMax, defaultPlotMinMax);
 				
-		pvPanel = new PVView(app, this, 0, 0);
+		pvPanel = new PVView(tab, this, 0, 0);
 		pvPanel.setInflation(pvInflation);
 
 		addMouseWheelListener(new MouseAdapter() {
@@ -232,8 +231,8 @@ public class SunPlottingPanel extends PlottingPanel {
 	 * Refreshes the plot data (x, y) for the current sun and reflection azalt data
 	 */
 	void refreshPlotData() {
-		sunPlotData = getPlotData(app.sunAzaltData);
-		reflectionPlotData = getPlotData(app.reflectionAzaltData);
+		sunPlotData = getPlotData(tab.sunAzaltData);
+		reflectionPlotData = getPlotData(tab.reflectionAzaltData);
 	}
 	
 	/**
@@ -290,9 +289,9 @@ public class SunPlottingPanel extends PlottingPanel {
 		addDrawable(pvPanel);
 		addDrawable(overlay);
 		addDrawable(mapControlPt);
-		addDrawable(app.sunBlock);
+		addDrawable(tab.sunBlock);
 		ArrayList<Dataset> sets = sunPlotData.getDatasetsRaw();
-		int t = app.when.getDayNumber();
+		int t = tab.when.getDayNumber();
 		if (t < sets.size()) {
 			Dataset xy = sunPlotData.getDataset(t);
 			sunDataset = new SunDataset(xy);
@@ -329,8 +328,22 @@ public class SunPlottingPanel extends PlottingPanel {
 	 * Sets the map.
 	 * 
 	 * @param map a MapImage, may be null
+	 * @param postUndo true to post an undoable edit
 	 */
-	void setMap(MapImage map) {
+	void setMap(MapImage map, boolean postUndo) {
+		if (postUndo && this.map != null
+				&& (this.map.tempImageName != null
+				|| this.map.getImagePath() != null)) {
+			String undoXML = new XMLControlElement(this.map).toXML();
+			String redoXML = null;
+			if (map != null
+					&& (map.tempImageName != null
+					|| map.getImagePath() != null)) {
+				redoXML = new XMLControlElement(map).toXML();
+			}
+			ReplaceMapEdit edit = tab.tabPanel.new ReplaceMapEdit(undoXML, redoXML);
+			tab.tabPanel.undoSupport.postEdit(edit);
+		}
 		this.map = map;
 	}
 	
@@ -404,7 +417,7 @@ public class SunPlottingPanel extends PlottingPanel {
 		Shape sunCircle = transform.createTransformedShape(circle);	
 		area = new Area(plotRect);
 		area.subtract(new Area(sunCircle));
-		g.setColor(app.sunBlock.fillColor);
+		g.setColor(tab.sunBlock.fillColor);
 		g2.fill(area);
 
 	}
@@ -426,7 +439,7 @@ public class SunPlottingPanel extends PlottingPanel {
 			int centerY = o.y; // origin
 			int r = Math.max(1, xToPix(90) - centerX);
 			
-			g2.setStroke(app.getStroke(1.5f));
+			g2.setStroke(tab.getStroke(1.5f));
 			
 			 // get plot limits
 			int top = panel.getTopGutter();
@@ -443,12 +456,12 @@ public class SunPlottingPanel extends PlottingPanel {
 			
 			// make radial paint
 			Point2D center = new Point2D.Float(o.x, o.y);
-	    Paint paint = new RadialGradientPaint(center, r, app.skyFractions, app.skyColors);
+	    Paint paint = new RadialGradientPaint(center, r, SunTab.skyFractions, SunTab.skyColors);
 	    g2.setPaint(paint);
 			g2.fill(horizonCircle);
 	    						
 			g.setColor(Color.LIGHT_GRAY);
-			g2.setStroke(app.getStroke(1f));
+			g2.setStroke(tab.getStroke(1f));
 			g2.draw(horizonCircle);
 			
 			// write compass points			
@@ -466,10 +479,10 @@ public class SunPlottingPanel extends PlottingPanel {
 
 			// draw camera
 			r += 5 * getXPixPerUnit();
-			double x = centerX + r * Math.sin(app.getCameraAz());
-			double y = centerY - r * Math.cos(app.getCameraAz());
+			double x = centerX + r * Math.sin(tab.getCameraAz());
+			double y = centerY - r * Math.cos(tab.getCameraAz());
 			transform.setToTranslation(x, y);
-			transform.rotate(app.getCameraAz());
+			transform.rotate(tab.getCameraAz());
 			Shape cam = transform.createTransformedShape(camera);	
 			g.setColor(Color.CYAN.darker());
 			g2.fill(cam);
@@ -526,7 +539,7 @@ public class SunPlottingPanel extends PlottingPanel {
 				len = 0;
 				startIndex = n-1;
 				for (int i = n; i < x.length; i++) {
-					if (!app.getRayVisibility(i)[isSun? 0: 1]) {
+					if (!tab.getRayVisibility(i)[isSun? 0: 1]) {
 						if (startIndex > n)
 							break;
 						else 
@@ -550,16 +563,16 @@ public class SunPlottingPanel extends PlottingPanel {
 				
 				if (isSun) {
 					// draw wide yellow line
-					g2.setStroke(app.getStroke(2));
-					setLineColor(app.currentRayColors[0][0]);
+					g2.setStroke(tab.getStroke(2));
+					setLineColor(tab.currentRayColors[0][0]);
 					super.drawData(drawingPanel, g2);
 					// draw narrow blue
-					g2.setStroke(app.getStroke(0.5f));
-					setLineColor(app.currentRayColors[0][1]);
+					g2.setStroke(tab.getStroke(0.5f));
+					setLineColor(tab.currentRayColors[0][1]);
 					super.drawData(drawingPanel, g2);
 				}
 				else {
-					g2.setStroke(app.getStroke(1));
+					g2.setStroke(tab.getStroke(1));
 					setLineColor(reflectionTrackColor);				
 					super.drawData(drawingPanel, g2);							
 				}
@@ -574,17 +587,17 @@ public class SunPlottingPanel extends PlottingPanel {
 		 */
 		protected void drawMessages() {
 			boolean isSun = this == sunDataset;
-			int t = app.when.getTimeIndex();
+			int t = tab.when.getTimeIndex();
 			
 			// write ray data in lower message boxes
-			double[][] rayData = app.getRayData(t);
+			double[][] rayData = tab.getRayData(t);
 			if (rayData == null)
 				return;
 
 			double az = rayData[isSun? 0: 1][0];
 			double alt = rayData[isSun? 0: 1][1];
 			String dataString = "";
-			boolean[] vis = app.getRayVisibility(t);
+			boolean[] vis = tab.getRayVisibility(t);
 			if (!vis[isSun? 0: 1]) {
 				dataString = isSun? 
 					alt < 0? "Sun is below the horizon":"Sun is blocked":
@@ -594,18 +607,18 @@ public class SunPlottingPanel extends PlottingPanel {
 				dataString = "Sun hits back of the panel";
 			}
 			else {
-				dataString = (isSun? "Sun:": "Reflection:") +" "+app.getAzaltString(az, alt);
+				dataString = (isSun? "Sun:": "Reflection:") +" "+tab.getAzaltString(az, alt);
 			}
 			setMessage(dataString, isSun? 0: 1);
 		
 			// write sun hours and insolation in upper message boxes
 			if (isSun) {
-				String date = app.when.getDateString();
-				String time = app.when.getTimeString();
-				double[] sunHrs = app.getTotalSunHours();
-				double hrs = app.round(sunHrs[0]*10) / 10.0;
+				String date = tab.when.getDateString();
+				String time = tab.when.getTimeString();
+				double[] sunHrs = tab.getTotalSunHours();
+				double hrs = tab.round(sunHrs[0]*10) / 10.0;
 				setMessage(date+": sun hours "+hrs, 3);
-				String insolation = time+": insolation "+percentFormat.format(app.getInsolation(t));
+				String insolation = time+": insolation "+percentFormat.format(tab.getInsolation(t));
 				setMessage(insolation, 2);
 			}								
 		}
@@ -654,7 +667,7 @@ public class SunPlottingPanel extends PlottingPanel {
 		public Object loadObject(XMLControl control, Object obj) {
 			SunPlottingPanel plot = (SunPlottingPanel)obj;
 			plot.setTracksVisible(control.getBoolean("tracks_visible"));
-			plot.setMap((MapImage)control.getObject("map"));
+			plot.setMap((MapImage)control.getObject("map"), false);
 			plot.setMapAlpha(control.getInt("map_alpha"));
 			plot.setTracksVisible(control.getBoolean("tracks_visible"));
 			plot.plot();

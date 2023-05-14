@@ -70,7 +70,7 @@ public class NOAAReader {
 	/**
 	 * Constructor
 	 * 
-	 * @param tab the SunApp
+	 * @param tab the SunTab
 	 */
 	NOAAReader(SunTab tab) {
 		this.tab = tab;
@@ -134,13 +134,10 @@ public class NOAAReader {
 			sunAngleData = buf.toString();
 		}
 		
-		double[] loc = readLocation();
-		
-    closeWorkbook();
-    
-    String name = tab.START_DAY + startDay + tab.LATITUDE + loc[0]
-    		+ tab.LONGITUDE + loc[1] + tab.ZONE + loc[2];
-    
+		double[] loc = readLocation();		
+    closeWorkbook();    
+    String name = SunTab.START_DAY + startDay + SunTab.LATITUDE + loc[0]
+    		+ SunTab.LONGITUDE + loc[1] + SunTab.ZONE + loc[2];    
 		return name + "\n" + buf.toString();		
   }
   

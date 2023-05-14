@@ -75,8 +75,8 @@ public class HorizontalPVView extends PVView {
 		Point2D above = new Point2D.Float(0, rect.y);
     Paint paint = new java.awt.LinearGradientPaint(above, 
     		below, 
-    		tab.skyFractions, 
-    		tab.skyColors);
+    		SunTab.skyFractions, 
+    		SunTab.skyColors);
     g2.setPaint(paint);
     g2.fill(rect);
     
@@ -212,7 +212,6 @@ public class HorizontalPVView extends PVView {
 	protected double getRayLength(double[] azAlt, double[] xyz) {
 		if (azAlt[1] == 0 || xyz[1] == 0)
 			return 100000;
-		Point p = getViewPoint(azAlt);
 		double y = Math.toDegrees(azAlt[1]);
 		return Math.abs(y / xyz[1]);
 	}

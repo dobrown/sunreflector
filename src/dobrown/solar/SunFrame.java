@@ -34,6 +34,11 @@ import java.awt.dnd.DropTargetDropEvent;
 import java.awt.dnd.DropTargetEvent;
 import java.awt.dnd.DropTargetListener;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -48,59 +53,51 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 
-import javax.swing.AbstractAction;
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JFrame;
-import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
-import javax.swing.JSlider;
-import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
-import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import javax.swing.event.MenuEvent;
 import javax.swing.event.MenuListener;
+import javax.swing.undo.UndoManager;
 
 import org.opensourcephysics.controls.XML;
 import org.opensourcephysics.controls.XMLControl;
 import org.opensourcephysics.controls.XMLControlElement;
-import org.opensourcephysics.display.OSPButton;
 import org.opensourcephysics.display.OSPRuntime;
 import org.opensourcephysics.tools.JarTool;
 import org.opensourcephysics.tools.Resource;
 import org.opensourcephysics.tools.ResourceLoader;
-
 import javajs.async.AsyncDialog;
 import javajs.async.AsyncFileChooser;
 
 /**
- * This is the JFrame for SunApp. It lays out the views and
+ * This is the JFrame for SunReflector. It lays out the views and
  * handles the toolbar and menubar.
  * 
  * @author Douglas Brown
  */
 public class SunFrame extends JFrame {
 	
-  static String version = "1.0.0";
+  static String version = "1.1.0";
   static int nameSuffix = 0;
 	
 	JTabbedPane tabbedPane;
+	int prevSelectedTabIndex = -1;
 	
 	JMenu fileMenu, editMenu, helpMenu;
-	JMenuItem newTabItem, closeTabItem;
+	JMenuItem newTabItem, closeTabItem, exitItem;
 	JMenuItem openItem, saveItem, saveAsItem, loadSunDataItem;
-	JMenuItem openImageItem, pasteImageItem, closeImageItem;
-	JMenuItem aboutItem;
+	JMenuItem pasteImageItem;
+	JMenuItem aboutItem, undoItem, redoItem;
 	JMenuItem skylineEditItem;
 	MenuListener menuListener;
 	
@@ -110,7 +107,7 @@ public class SunFrame extends JFrame {
 	/**
 	 * Constructor
 	 * 
-	 * @param tab the SunApp
+	 * @param tab the SunTab
 	 */
 	SunFrame() {
 		createGUI();
@@ -130,6 +127,14 @@ public class SunFrame extends JFrame {
 	}
 	
 	void removeTab(int i) {
+		if (!saveChanges(i))
+			return;
+		SunTab tab = getTab(i);
+		tab.frame = null;
+		if (tab.sunBlock.editor != null) {
+			tab.sunBlock.editor.setVisible(false);
+			tab.sunBlock.editor.dispose();
+		}
 		synchronized (tabbedPane) {
 			tabbedPane.remove(i);
 		}
@@ -160,6 +165,18 @@ public class SunFrame extends JFrame {
 				SunTabPanel next = ((SunTabPanel) tabbedPane.getComponentAt(i));
 				String nextPath = XML.forwardSlash(next.tab.myFile.getAbsolutePath());
 				if (path.equals(nextPath)) {
+					return i;
+				}
+			}
+		}
+		return - 1;
+	}
+			
+	int getTabIndex(SunTab tab) {
+		synchronized (tabbedPane) {
+			for (int i = tabbedPane.getTabCount(); --i >= 0;) {
+				SunTabPanel next = ((SunTabPanel) tabbedPane.getComponentAt(i));
+				if (next.tab == tab) {
 					return i;
 				}
 			}
@@ -204,8 +221,9 @@ public class SunFrame extends JFrame {
 		BufferedImage image = ResourceLoader.getBufferedImage(
 				SunTab.RESOURCE_PATH + SunPlottingPanel.defaultMapImage); 
 		if (image != null) {
-			MapImage map = new MapImage(image);
-			tab.plot.setMap(map);
+			String path = SunTab.RESOURCE_PATH + SunPlottingPanel.defaultMapImage;
+			MapImage map = new MapImage(image, path);
+			tab.plot.setMap(map, false);
 			tab.plot.getMap().setOrigin(
 					SunPlottingPanel.defaultMapOrigin[0], 
 					SunPlottingPanel.defaultMapOrigin[1]);
@@ -217,6 +235,21 @@ public class SunFrame extends JFrame {
 		frame.pack();
 		frame.refreshDisplay();
 		frame.setVisible(true);
+		frame.addWindowListener(new WindowAdapter() {
+			@Override
+			public void windowClosing(WindowEvent e) {
+				frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);				
+				for (int i = 0; i < frame.tabbedPane.getTabCount(); i++) {
+					if (!frame.saveChanges(i))
+						frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+				}
+			}
+			@Override
+			public void windowClosed(WindowEvent e) {
+				if (frame.getDefaultCloseOperation() == JFrame.DO_NOTHING_ON_CLOSE)
+					frame.setVisible(true);
+			}
+		});
 	}
 	
 	
@@ -227,13 +260,51 @@ public class SunFrame extends JFrame {
 		
 		setTitle("Sun Reflector");
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setPreferredSize(new Dimension(800, 800));
+		setPreferredSize(new Dimension(750, 800));
 		setLocation(350, 0);
 		
 		JPanel contentPane = new JPanel(new BorderLayout());
 		setContentPane(contentPane);
 		tabbedPane = new JTabbedPane(SwingConstants.BOTTOM);
+		tabbedPane.addChangeListener(new ChangeListener() {
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				if (prevSelectedTabIndex > -1 && prevSelectedTabIndex < tabbedPane.getTabCount()) {
+					SunTab tab = getTab(prevSelectedTabIndex);
+					if (tab.sunBlock.editor != null) {
+						tab.sunBlock.editor.wasVisible = tab.sunBlock.editor.isVisible();
+						tab.sunBlock.editor.setVisible(false);
+					}
+					
+				}
+				int n = tabbedPane.getSelectedIndex();
+				SunTab tab = getTab(n);
+				if (tab == null)
+					return;
+				if (tab.sunBlock.editor != null) {
+					tab.sunBlock.editor.setVisible(tab.sunBlock.editor.wasVisible);
+				}
+				prevSelectedTabIndex = n;
+			}
+		});
 		contentPane.add(tabbedPane, BorderLayout.CENTER);
+		tabbedPane.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mousePressed(MouseEvent e) {
+				if (OSPRuntime.isPopupTrigger(e)) {
+					int i = tabbedPane.getSelectedIndex();
+					String name = tabbedPane.getTitleAt(i);
+					JPopupMenu popup = new JPopupMenu();
+					JMenuItem closeItem = new JMenuItem("Close \""+name+"\"");
+					closeItem.addActionListener((ev) -> {
+						removeTab(i);
+					});
+					popup.add(closeItem);
+					popup.show(tabbedPane, e.getX(), e.getY());
+				}
+			}
+		});
+		
 		createMenuBar();
 	}
 	
@@ -241,17 +312,6 @@ public class SunFrame extends JFrame {
 	 * Refreshes the display to reflect the current settings.
 	 */
 	void refreshDisplay() {
-//		int i = tabbedPane.getSelectedIndex();
-//		saveItem.setText("Save "+(i<0? "": "\"" + tabbedPane.getTitleAt(i)+ "\""));
-//		saveItem.setEnabled(i >= 0);
-//		closeTabItem.setText("Close "+(i<0? "": "\"" + tabbedPane.getTitleAt(i)+ "\""));
-//		saveAsItem.setEnabled(i >= 0);
-//		loadSunDataItem.setEnabled(i >= 0);
-//		openImageItem.setEnabled(i >= 0);
-//		pasteImageItem.setEnabled(i >= 0);
-//		closeImageItem.setEnabled(i >= 0);
-//		skylineEditItem.setEnabled(i >= 0);
-		
 		SunTabPanel panel = getSelectedTabPanel();
 		if (panel != null)
 			panel.refreshDisplay();
@@ -265,7 +325,8 @@ public class SunFrame extends JFrame {
 		editMenu = new JMenu("Edit");
 		helpMenu = new JMenu("Help"); //$NON-NLS-1$
 
-  	int keyMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMask();		
+  	@SuppressWarnings("deprecation")
+		int keyMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMask();		
   	newTabItem = new JMenuItem("New Tab"); //$NON-NLS-1$
   	newTabItem.setAccelerator(KeyStroke.getKeyStroke('N', keyMask));
   	newTabItem.addActionListener((e) -> {
@@ -310,22 +371,15 @@ public class SunFrame extends JFrame {
 			saveAs();
 		});
 		
-		openImageItem = new JMenuItem("Open Map..."); //$NON-NLS-1$
-		openImageItem.addActionListener((e) -> {
-			openImage();
-			refreshDisplay();
+  	exitItem = new JMenuItem("Exit"); //$NON-NLS-1$
+  	exitItem.addActionListener((e) -> {
+			for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+				if (!saveChanges(i))
+					return;
+			}
+			System.exit(0);
 		});
 
-		closeImageItem = new JMenuItem("Close Map"); //$NON-NLS-1$
-		closeImageItem.addActionListener((e) -> {
-			SunTab tab = getSelectedTab();
-			if (tab != null) {
-				tab.plot.setMap(null);
-				tab.plot.repaint();
-				refreshDisplay();
-			}
-		});
-		
 		fileMenu.add(newTabItem);
 		fileMenu.addSeparator();
 		fileMenu.add(openItem);
@@ -333,10 +387,37 @@ public class SunFrame extends JFrame {
 		fileMenu.addSeparator();
 		fileMenu.add(saveItem);
 		fileMenu.add(saveAsItem);
-//		fileMenu.addSeparator();
-//		fileMenu.add(openImageItem);
-//		fileMenu.addSeparator();
-//		fileMenu.add(closeImageItem);
+		fileMenu.addSeparator();
+		fileMenu.add(exitItem);
+		
+		// add undo and redo items
+		undoItem = new JMenuItem("Undo");
+		editMenu.add(undoItem);
+		undoItem.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				SunTab tab = getSelectedTab();
+				if (tab != null) {
+					tab.tabPanel.undoManager.undo();
+					tab.tabPanel.refreshDisplay();
+					tab.plot.repaint();
+				}
+			}
+
+		});
+		redoItem = new JMenuItem("Redo");
+		editMenu.add(redoItem);
+		redoItem.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				SunTab tab = getSelectedTab();
+				if (tab != null) {
+					tab.tabPanel.undoManager.redo();
+					tab.tabPanel.refreshDisplay();
+					tab.plot.repaint();
+				}
+			}
+		});
 		
 		pasteImageItem = new JMenuItem("Paste Map"); //$NON-NLS-1$
 		pasteImageItem.setAccelerator(KeyStroke.getKeyStroke('V', keyMask));
@@ -363,6 +444,9 @@ public class SunFrame extends JFrame {
 			refreshDisplay();
 		});
 		
+		editMenu.add(undoItem);
+		editMenu.add(redoItem);
+		editMenu.addSeparator();
 		editMenu.add(pasteImageItem);
 		editMenu.addSeparator();
 		editMenu.add(skylineEditItem);
@@ -386,13 +470,13 @@ public class SunFrame extends JFrame {
 
 			@Override
 			public void menuSelected(MenuEvent e) {
-				boolean enable = false;
+				boolean canPaste = false;
 				Transferable t = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
 				try {
-					enable = t != null && t.isDataFlavorSupported(DataFlavor.imageFlavor);
+					canPaste = t != null && t.isDataFlavorSupported(DataFlavor.imageFlavor);
 				} catch (Exception ex) {
 				}
-				pasteImageItem.setEnabled(enable);
+				pasteImageItem.setEnabled(canPaste);
 
 				int i = tabbedPane.getSelectedIndex();
 				boolean b = i >= 0;
@@ -401,10 +485,21 @@ public class SunFrame extends JFrame {
 				closeTabItem.setText("Close "+(!b? "": "\"" + tabbedPane.getTitleAt(i)+ "\""));
 				closeTabItem.setEnabled(b);
 				saveAsItem.setEnabled(b);
-				openImageItem.setEnabled(b);
 				loadSunDataItem.setEnabled(b);
-				closeImageItem.setEnabled(b);
 				skylineEditItem.setEnabled(b);
+				
+				SunTab tab = getSelectedTab();
+				if (tab != null) {
+					UndoManager undo = tab.tabPanel.undoManager;
+					undoItem.setEnabled(undo.canUndo());
+					redoItem.setEnabled(undo.canRedo());
+					undoItem.setText(undo.canUndo()?
+							undo.getUndoPresentationName():
+							"Undo");
+					redoItem.setText(undo.canRedo()?
+							undo.getRedoPresentationName():
+							"Redo");
+				}
 			}
 
 			@Override
@@ -418,6 +513,35 @@ public class SunFrame extends JFrame {
 		fileMenu.addMenuListener(menuListener);
   }
   
+	/**
+	 * Offers to save changes to the tab at the specified index.
+	 *
+	 * @param i the tab index
+	 * @return true unless canceled by the user
+	 */
+	protected boolean saveChanges(int i) {
+		SunTab tab = getTab(i);
+		if (!tab.changed) {
+			return true;
+		}
+		String name = tabbedPane.getTitleAt(i);
+		int selected = JOptionPane.showConfirmDialog(this, "The tab " + //$NON-NLS-1$
+				" \"" + name + "\" has changed.\n" +
+				"Do you wish to save the changes?", //$NON-NLS-1$ //$NON-NLS-2$
+				"Save Changes", //$NON-NLS-1$
+				JOptionPane.YES_NO_CANCEL_OPTION);
+		if (selected == JOptionPane.CANCEL_OPTION) {
+			return false;
+		}
+		if (selected == JOptionPane.YES_OPTION) {
+			String path = tab.myFile == null? null: tab.myFile.getAbsolutePath();
+			if (saveTab(tab, path) == null) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	/**
 	 * Opens a Sun Reflector tab (zip file) or warns if file is not valid.
 	 */  
@@ -442,38 +566,6 @@ public class SunFrame extends JFrame {
 				OSPRuntime.setPreference("file_chooser_directory", file.getParent());
 				OSPRuntime.savePreferences();
 				open(file);
-//				
-//				// check for zip file and open the xml file inside, if any
-//				if (SunApp.zipFileFilter.accept(file)) {
-//					String path = file.getAbsolutePath();
-//					Map<String, ZipEntry> contents = ResourceLoader.getZipContents(path, true);
-//					if (contents != null) {
-//						for (String key: contents.keySet()) {
-//							ZipEntry entry = contents.get(key);
-//							String name = entry.getName();
-//							if (name != null && name.toLowerCase().endsWith(".xml")) {
-//								SunApp.zipFilePath = file.getAbsolutePath() + "!/";
-//								name = SunApp.zipFilePath + name;
-//								file = new File(name);
-//								break;
-//							}
-//						}
-//					}
-//				}
-//				XMLControlElement control = new XMLControlElement(file.getAbsolutePath());
-//				Class<?> type = control.getObjectClass();
-//				if (type == SunApp.class) {
-//					control.loadObject(app);
-//					myFile = chooser.getSelectedFile();
-//					refreshDisplay();
-//				}
-//				else {
-//					// show warning dialog
-//					JOptionPane.showMessageDialog(app.frame, 
-//							"\""+chooser.getSelectedFile().getName()+"\" is not a SunReflector file.", //$NON-NLS-1$
-//							"Error", //$NON-NLS-1$
-//							JOptionPane.WARNING_MESSAGE);
-//				}
 			}			
 		};
 		chooser.showOpenDialog(this, ok, () -> {});
@@ -530,8 +622,10 @@ public class SunFrame extends JFrame {
 				SunPlottingPanel plot = tab.plot;
 				MapImage map = new MapImage(path);
 				if (map.getImagePath() != null) {
-					plot.setMap(map);
+					plot.setMap(map, true);
+					tab.changed = true;
 					plot.repaint();
+					tab.tabPanel.refreshDisplay();
 				}
 				else {
 					// show warning dialog
@@ -554,8 +648,11 @@ public class SunFrame extends JFrame {
 	
 	/**
 	 * Saves a Sun Reflector zip with a file chooser.
+	 * 
+	 * @return the save path, or null if cancelled
 	 */
-	public void saveAs() {
+	public String saveAs() {
+		String[] path = new String[] {null};
 		AsyncFileChooser chooser = OSPRuntime.getChooser();
 		String chooserPath = (String)OSPRuntime.getPreference("file_chooser_directory");
 		if (chooserPath != null) {
@@ -592,22 +689,34 @@ public class SunFrame extends JFrame {
 						return;
 					}
 				}
-				save(fileName);
+				path[0] = save(fileName);
 			}			
 		};
 		chooser.showSaveDialog(this, ok, () -> {});
 		chooser.resetChoosableFileFilters();
+		return path[0];
 	}
 	
 	/**
-	 * Saves a Sun Reflector zip file to a specified path.
+	 * Saves a Sun Reflector tab to a specified path.
 	 * 
 	 * @param zipFilePath the path
 	 */
-	public void save(String zipFilePath) {
+	public String save(String zipFilePath) {
 		SunTab tab = getSelectedTab();
+		return saveTab(tab, zipFilePath);
+	}
+	
+	/**
+	 * Saves a Sun Reflector tab to a specified path.
+	 * 
+	 * @param zipFilePath the path
+	 */
+	public String saveTab(SunTab tab, String zipFilePath) {
 		if (tab == null)
-			return;
+			return null;
+		if (zipFilePath == null)
+			return saveAs();
 
 		String baseName = XML.stripExtension(XML.getName(zipFilePath));
 		tempDir = getTempDirectory();
@@ -643,7 +752,9 @@ public class SunFrame extends JFrame {
 			OSPRuntime.trigger(1000, (e) -> {
 				ResourceLoader.deleteFile(new File(tempDir));
 			});
+			return zipFilePath;
 		}
+		return null;
 	}
 	
 	/**
@@ -726,20 +837,6 @@ public class SunFrame extends JFrame {
 				OSPRuntime.setPreference("file_chooser_directory", file.getParent());
 				OSPRuntime.savePreferences();
 				open(file);
-//				String path = file.getAbsolutePath();
-//				SunPlottingPanel plot = app.plot;
-//				MapImage map = new MapImage(path);
-//				if (map.getImagePath() != null) {
-//					plot.setMap(map);
-//					plot.repaint();
-//				}
-//				else {
-//					// show warning dialog
-//					JOptionPane.showMessageDialog(app.frame, 
-//							"\""+chooser.getSelectedFile().getName()+"\" is not a readable image file.", //$NON-NLS-1$
-//							"Error", //$NON-NLS-1$
-//							JOptionPane.WARNING_MESSAGE);
-//				}
 			}			
 		};
 		chooser.showOpenDialog(this, ok, null);
@@ -759,7 +856,8 @@ public class SunFrame extends JFrame {
 				Image image = (Image) t.getTransferData(DataFlavor.imageFlavor);
 				if (image != null) {
 					MapImage map = new MapImage(image);
-					tab.plot.setMap(map);
+					tab.plot.setMap(map, true);
+					tab.changed = true;
 					tab.plot.repaint();
 				}
 			}
