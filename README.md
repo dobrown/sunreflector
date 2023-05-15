@@ -3,7 +3,7 @@ Sun Reflector: a solar insolation and reflection simulator
 
 This is a Java program whose primary purpose is to simulate reflections from a solar panel. Reflections are important because they can be quite bright and if directed toward residences or streets they may cause annoying and possibly dangerous glare. 
 
-A secondary purpose is to determine the daily sun hours incident on the panel. Mountains, trees and other obstacles can be drawn by the user to make this determination more accurate.
+A secondary purpose is to determine the daily sun hours incident on the panel. A skyline of mountains, trees and buildings can be drawn by the user to make this determination more accurate.
 
 The Java code is built on the Open Source Physics (OSP) framework and requires the OSP Core Library available in the <a href="https://github.com/OpenSourcePhysics/osp" target="_blank">OpenSourcePhysics/osp</a> repository.
 
