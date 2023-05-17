@@ -87,7 +87,7 @@ import javajs.async.AsyncFileChooser;
  */
 public class SunFrame extends JFrame {
 	
-  static String version = "1.1.0";
+  static String version = "1.1.1";
   static int nameSuffix = 0;
 	
 	JTabbedPane tabbedPane;
