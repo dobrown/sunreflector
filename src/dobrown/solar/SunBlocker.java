@@ -1084,7 +1084,7 @@ public class SunBlocker implements Drawable {
 		void refreshPlotTitle() {
 			String s = "Alt-control-drag to draw a skyline. "
 					+ "Add images to trace for better accuracy.";
-			axes.setTitle(s, "Arial-PLAIN-14");			
+			axes.setTitle(s, "Arial-BOLD-14");			
 		}
 
 	};
@@ -1119,7 +1119,7 @@ public class SunBlocker implements Drawable {
       altLabel.setJustification(TextLine.CENTER);
       altLabel.setTheta(Math.PI/2);
       altLabel.setPixelXY(true);
-      titleLine.setFont(labelFont.deriveFont(16f));
+//      titleLine.setFont(labelFont.deriveFont(16f).deriveFont(Font.BOLD));
       titleLine.setJustification(TextLine.CENTER);
       titleLine.setPixelXY(true);
 			sunPt = new SunPoint(panel);
