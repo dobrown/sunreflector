@@ -398,10 +398,11 @@ public class SunBlocker implements Drawable {
 					JPopupMenu popup = new JPopupMenu();
 					int n = tab.round((blockPlot.zoomFactor - 1) * 20);
 					n = Math.min(Math.max(0, n), 100);
-					double center = (blockPlot.getPreferredXMax() + blockPlot.getPreferredXMin()) / 2;
+					double centerX = (blockPlot.getPreferredXMax() + blockPlot.getPreferredXMin()) / 2;
+					double centerY = (blockPlot.getPreferredYMax() + blockPlot.getPreferredYMin()) / 2;
 					JSlider zoomSlider = new JSlider(JSlider.HORIZONTAL, 0, 100, n);
 					zoomSlider.addChangeListener(ev -> {
-			      blockPlot.zoom(1 + zoomSlider.getValue()/20.0, center);
+			      blockPlot.zoom(1 + zoomSlider.getValue()/20.0, centerX, centerY);
 			    });
 			    popup.add(zoomSlider);
 			    popup.show(zoomButton, 0, zoomButton.getHeight());
@@ -738,8 +739,8 @@ public class SunBlocker implements Drawable {
 		
 		Dataset editorProfileDataset;
 		double xPrevProfile = -181;
-		int mouseX0;
-		double xmin0, plotWidth;
+		int mouseX0, mouseY0;
+		double xmin0, ymin0, plotWidth, plotHeight;
 		SunPoint profilerPt;
 		SunPoint utilityPt;
 		SunPoint moverPt;
@@ -778,6 +779,7 @@ public class SunBlocker implements Drawable {
 					}
 					else {
 						dx = (mouseEvent.getX() - mouseX0) / getXPixPerUnit();
+						dy = (-mouseEvent.getY() + mouseY0) / getYPixPerUnit();
 						// move plot limits if zoomed
 						double xmin = xmin0 - dx;
 						double xmax = xmin + plotWidth;
@@ -789,7 +791,18 @@ public class SunBlocker implements Drawable {
 							xmax = 180;
 							xmin = xmax - plotWidth;
 						}
+						double ymin = ymin0 - dy;
+						double ymax = ymin + plotHeight;
+						if (ymin < 0) {
+							ymin = 0;
+							ymax = ymin + plotHeight;
+						}
+						else if (ymax > 90) {
+							ymax = 90;
+							ymin = ymax - plotHeight;
+						}
 						setPreferredMinMaxX(xmin, xmax);
+						setPreferredMinMaxY(ymin, ymax);
 						repaint();
 					}
 				}	
@@ -850,9 +863,12 @@ public class SunBlocker implements Drawable {
 					if (e.getButton() == MouseEvent.BUTTON1) {
 						Point p = e.getPoint();
 						mouseX0 = p.x;
+						mouseY0 = p.y;
 						moverPt.setScreenPosition(p.x, p.y);
 						xmin0 = getPreferredXMin();
+						ymin0 = getPreferredYMin();
 						plotWidth = Math.min(360, getPreferredXMax() - xmin0);
+						plotHeight = Math.min(90, getPreferredYMax() - ymin0);
 						if (e.isShiftDown() || e.isControlDown())
 							selectMapImageAt(moverPt);
 					}
@@ -875,8 +891,9 @@ public class SunBlocker implements Drawable {
 				@Override
 				public void mouseClicked(MouseEvent e) {
 					if (e.getClickCount() == 2) {
-						double center = (blockPlot.getPreferredXMax() + blockPlot.getPreferredXMin()) / 2;
-				    blockPlot.zoom(1, center);
+						double centerX = (blockPlot.getPreferredXMax() + blockPlot.getPreferredXMin()) / 2;
+						double centerY = (blockPlot.getPreferredYMax() + blockPlot.getPreferredYMin()) / 2;
+				    blockPlot.zoom(1, centerX, centerY);
 					}
 				}
 
@@ -909,7 +926,7 @@ public class SunBlocker implements Drawable {
 						double factor = Math.pow(SunTab.ZOOM_FACTOR, delta) ;
 						Point p = e.getPoint();
 						utilityPt.setScreenPosition(p.x,  p.y);
-						zoom(zoomFactor * factor, utilityPt.getX());
+						zoom(zoomFactor * factor, utilityPt.getX(), utilityPt.getY());
 					}
 				}
 			});
@@ -935,7 +952,7 @@ public class SunBlocker implements Drawable {
 					&& (mouseEvent.isShiftDown() || mouseEvent.isControlDown()))
 				setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));	
 			else if (zoomFactor > 1.05)
-				setCursor(Cursor.getPredefinedCursor(Cursor.W_RESIZE_CURSOR));	
+				setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));	
 			else
 				setCursor(Cursor.getDefaultCursor());
 		}
@@ -957,8 +974,9 @@ public class SunBlocker implements Drawable {
 		 * 
 		 * @param factor the zoom factor
 		 * @param fixedX the x value that remains fixed in the plot
+		 * @param fixedY the y value that remains fixed in the plot
 		 */
-		void zoom(double factor, double fixedX) {
+		void zoom(double factor, double fixedX, double fixedY) {
 			factor = Math.max(factor, 1);
 			double df = factor / zoomFactor;
 			zoomFactor = factor;
@@ -976,8 +994,21 @@ public class SunBlocker implements Drawable {
 				xmin = xmax - w;
 			}
 
-			double ymin = 0;
-			double ymax = (xmax - xmin) / 4; // ratio of w/h always 360/90 = 4
+			double h = 90 / factor;
+			double ymin = getPreferredYMin();
+			ymin = (ymin + (df - 1) * fixedY) / df;
+			double ymax = ymin + h;
+			
+			if (ymin < 0) {
+				ymin = 0;
+				ymax = ymin + h;
+			}
+			else if (ymax > 90) {
+				ymax = 90;
+				ymin = ymax - h;
+			}
+//			double ymin = 0;
+//			double ymax = (xmax - xmin) / 4; // ratio of w/h always 360/90 = 4
 			
 			this.setPreferredMinMaxX(xmin, xmax);
 			this.setPreferredMinMaxY(ymin, ymax);
@@ -1008,7 +1039,7 @@ public class SunBlocker implements Drawable {
 			// set clip to interior area of plot
 			utilityPt.setLocation(getPreferredXMin(),  getPreferredYMax());
 			Point p0 = new Point(utilityPt.getScreenPosition());
-			utilityPt.setLocation(getPreferredXMax(),  0);
+			utilityPt.setLocation(getPreferredXMax(),  getPreferredYMin());
 			Point p1 = new Point(utilityPt.getScreenPosition());
       
 			g.setColor(Color.WHITE);
@@ -1102,7 +1133,7 @@ public class SunBlocker implements Drawable {
 	  	
   		sunPt.setLocation(drawingPanel.getPreferredXMin(), drawingPanel.getPreferredYMax());
   		Point p1 = new Point(sunPt.getScreenPosition());
-  		sunPt.setLocation(drawingPanel.getPreferredXMax(), 0);
+  		sunPt.setLocation(drawingPanel.getPreferredXMax(), drawingPanel.getPreferredYMin());
   		Point p2 = sunPt.getScreenPosition();
   		clipRect.setRect(p1.x-1, p1.y-1, p2.x-p1.x+2, p2.y-p1.y+2);	  	
 	  	g.setClip(clipRect);
@@ -1141,6 +1172,8 @@ public class SunBlocker implements Drawable {
 	  	g.setColor(Color.BLACK);
       int h = labelFontMetrics.getHeight();
 	  	for (int i = 0; i < 91; i += interval) {
+	  		if (i < blockPlot.getPreferredYMin())
+	  			continue;
 	  		if (i > blockPlot.getPreferredYMax())
 	  			break;
 	  		sunPt.setLocation(blockPlot.getPreferredXMin(), i);
@@ -1154,7 +1187,7 @@ public class SunBlocker implements Drawable {
 	  			continue;
 	  		if (i > blockPlot.getPreferredXMax())
 	  			break;
-	  		sunPt.setLocation(i, 0);
+	  		sunPt.setLocation(i, blockPlot.getPreferredYMin());
 	  		p1 = new Point(sunPt.getScreenPosition());
 	  		String s = String.valueOf(i)+FunctionEditor.DEGREES;
 	  		if (i==0)
@@ -1170,14 +1203,14 @@ public class SunBlocker implements Drawable {
 	  	}
 	  	
 	  	double xx = (blockPlot.getPreferredXMin() + blockPlot.getPreferredXMax()) / 2;
-	  	sunPt.setLocation(xx, 0);
+	  	sunPt.setLocation(xx, blockPlot.getPreferredYMin());
 	  	p1 = sunPt.getScreenPosition();
       azLabel.setX(p1.x);
       azLabel.setY(p1.y + 2*h + 5);
       azLabel.setColor(Color.BLACK);
       azLabel.draw(panel, g);
 
-      double yy = blockPlot.getPreferredYMax() / 2;
+      double yy = (blockPlot.getPreferredYMax() + blockPlot.getPreferredYMin()) / 2;
 	  	sunPt.setLocation(blockPlot.getPreferredXMin(), yy);
 	  	p1 = sunPt.getScreenPosition();
       altLabel.setX(p1.x - h - 10);
@@ -1185,7 +1218,7 @@ public class SunBlocker implements Drawable {
       altLabel.setColor(Color.BLACK);
       altLabel.draw(panel, g);
 
-	  	sunPt.setLocation(xx, 2*yy);
+	  	sunPt.setLocation(xx, blockPlot.getPreferredYMax());
 	  	p1 = sunPt.getScreenPosition();
       titleLine.setX(p1.x);
       titleLine.setY(p1.y - h);
