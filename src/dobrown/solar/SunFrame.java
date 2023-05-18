@@ -749,8 +749,12 @@ public class SunFrame extends JFrame {
 		File target = new File(zipFilePath);
 		if (JarTool.compress(filesToZip, target, null)) {
 			tab.myFile = target;
+			tab.changed = false;
+			int i = getTabIndex(tab);
+			tabbedPane.setTitleAt(i, XML.getName(zipFilePath));
 			OSPRuntime.trigger(1000, (e) -> {
 				ResourceLoader.deleteFile(new File(tempDir));
+				tempDir = null;
 			});
 			return zipFilePath;
 		}
